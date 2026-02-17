@@ -1,0 +1,22 @@
+hrmos:
+  base_url: "https://hrmos.co/interviews"
+  login_url: "https://hrmos.co/login"  # 実際のログインURLに変更してください
+
+# 認証情報（環境変数 HRMOS_EMAIL / HRMOS_PASSWORD でも指定可）
+credentials:
+  email: ""
+  password: ""
+
+# 検索キーワード（大文字/小文字を区別しない）
+keywords:
+  - "AI"
+  - "機械学習"
+  - "Python"
+
+scan:
+  download_dir: "./data/downloads"
+  report_dir: "./data/reports"
+  db_path: "./data/hrmos.db"
+  wait_between_pages: 2        # ページ間の待機秒数（サーバー負荷軽減）
+  headless: false              # true: ブラウザ非表示 / false: ブラウザ表示
+  delete_downloads_after: false # true: 解析後にダウンロードファイルを削除

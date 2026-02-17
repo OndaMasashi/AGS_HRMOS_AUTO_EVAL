@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.neo-career.co.jp)",
+      "WebFetch(domain:www.tracom.co.jp)",
+      "WebFetch(domain:hrmos.co)",
+      "WebFetch(domain:playwright.dev)",
+      "Bash(pip show:*)"
+    ]
+  }
+}
