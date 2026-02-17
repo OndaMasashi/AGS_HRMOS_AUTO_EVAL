@@ -14,6 +14,10 @@ def setup_logging(verbose: bool = False):
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    # サードパーティライブラリのDEBUGログを抑制
+    if verbose:
+        for noisy_logger in ["pdfminer", "pdfplumber", "PIL", "urllib3", "asyncio"]:
+            logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
 
 def main():

@@ -25,8 +25,12 @@ def scan_text(text: str, keywords: list[str]) -> list[dict]:
     seen = set()  # 同一キーワード・同一位置の重複を排除
 
     for keyword in keywords:
-        # 大文字/小文字を区別しない検索
-        pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+        # 大文字/小文字を区別しない、単語境界付き検索
+        # 英字キーワードは \b で単語境界を付け、"mail" 等の誤検知を防止
+        escaped = re.escape(keyword)
+        if re.fullmatch(r'[A-Za-z0-9_]+', keyword):
+            escaped = rf'\b{escaped}\b'
+        pattern = re.compile(escaped, re.IGNORECASE)
 
         for match in pattern.finditer(text):
             pos = match.start()

@@ -8,8 +8,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 from src.browser.auth import ensure_authenticated, has_saved_session, STORAGE_STATE_PATH
-from src.browser.navigator import collect_applicant_links, get_attachment_links
-from src.browser.downloader import download_file
+from src.browser.navigator import collect_applicant_links, get_attachment_links, download_attachment
 from src.config import load_config
 from src.database.models import init_db
 from src.database.repository import Repository
@@ -87,7 +86,7 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
                 logger.info(f"[{i}/{len(targets)}] {app_name} を処理中...")
 
                 try:
-                    # 添付ファイルリンクを取得
+                    # 添付ファイル情報を取得
                     attachments = await get_attachment_links(page, app_url)
 
                     if not attachments:
@@ -101,8 +100,8 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
 
                     for att in attachments:
                         # ダウンロード
-                        file_path = await download_file(
-                            page, att["url"], app_download_dir, att["filename"]
+                        file_path = await download_attachment(
+                            page, att["filename"], app_download_dir
                         )
                         if not file_path:
                             continue

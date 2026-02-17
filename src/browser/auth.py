@@ -1,4 +1,4 @@
-"""HRMOS採用の認証モジュール - ログインとセッション管理"""
+"""HRMOS採用の認証モジュール - 2段階ログインとセッション管理"""
 
 import logging
 from pathlib import Path
@@ -13,7 +13,7 @@ STORAGE_STATE_PATH = "storage_state.json"
 
 
 async def login(page: Page, config: dict) -> bool:
-    """HRMOS採用にメール+パスワードでログインする"""
+    """HRMOS採用に2段階（メール→パスワード）でログインする"""
     login_url = config["hrmos"]["login_url"]
     email = config["credentials"]["email"]
     password = config["credentials"]["password"]
@@ -22,20 +22,31 @@ async def login(page: Page, config: dict) -> bool:
     await page.goto(login_url, wait_until="networkidle")
 
     try:
-        # メールアドレス入力
-        await page.wait_for_selector(LoginSelectors.EMAIL_INPUT, timeout=10000)
-        await page.fill(LoginSelectors.EMAIL_INPUT, email)
-
-        # パスワード入力
-        await page.fill(LoginSelectors.PASSWORD_INPUT, password)
-
-        # ログインボタンクリック
-        await page.click(LoginSelectors.LOGIN_BUTTON)
-
-        # ログイン成功の確認
-        await page.wait_for_selector(
-            LoginSelectors.LOGIN_SUCCESS_INDICATOR, timeout=15000
+        # Step 1: メールアドレス入力 → 「続行」クリック
+        email_input = page.get_by_role(
+            LoginSelectors.EMAIL_INPUT_ROLE, name=LoginSelectors.EMAIL_INPUT_NAME
         )
+        await email_input.wait_for(timeout=10000)
+        await email_input.click()
+        await email_input.fill(email)
+
+        continue_btn = page.get_by_role("button", name=LoginSelectors.CONTINUE_BUTTON_NAME)
+        await continue_btn.click()
+
+        # Step 2: パスワード入力 → 「ログイン」クリック
+        password_input = page.get_by_role(
+            LoginSelectors.PASSWORD_INPUT_ROLE, name=LoginSelectors.PASSWORD_INPUT_NAME
+        )
+        await password_input.wait_for(timeout=10000)
+        await password_input.fill(password)
+
+        login_btn = page.get_by_role(
+            "button", name=LoginSelectors.LOGIN_BUTTON_NAME, exact=True
+        )
+        await login_btn.click()
+
+        # ログイン成功の確認（URLがloginから変わるのを待つ）
+        await page.wait_for_url("**/interviews**", timeout=15000)
         logger.info("ログイン成功")
         return True
 
@@ -63,7 +74,6 @@ async def ensure_authenticated(context: BrowserContext, page: Page, config: dict
     success = await login(page, config)
 
     if success:
-        # セッション状態を保存
         await save_session(context)
 
     return success

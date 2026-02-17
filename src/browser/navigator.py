@@ -1,4 +1,4 @@
-"""応募者一覧ページの巡回と個別ページへの遷移"""
+"""応募者一覧ページの巡回と個別ページへの遷移（Playwright locator API使用）"""
 
 import asyncio
 import logging
@@ -16,137 +16,248 @@ async def collect_applicant_links(page: Page, config: dict) -> list[dict]:
     """応募者一覧から全応募者のリンクと名前を収集する"""
     base_url = config["hrmos"]["base_url"]
     wait_sec = config["scan"].get("wait_between_pages", 2)
-    applicants = []
-    page_num = 1
 
     logger.info(f"応募者一覧ページに遷移: {base_url}")
     await page.goto(base_url, wait_until="networkidle")
 
+    # 「さらに表示」を繰り返しクリックして全応募者を読み込む
+    load_round = 1
     while True:
-        logger.info(f"ページ {page_num} から応募者を収集中...")
-
-        # 応募者リンクを取得
-        links = await page.query_selector_all(ApplicantListSelectors.APPLICANT_LINK)
-
-        for link in links:
-            try:
-                href = await link.get_attribute("href")
-                name_el = await link.query_selector(ApplicantListSelectors.APPLICANT_NAME)
-                name = await name_el.inner_text() if name_el else await link.inner_text()
-                name = name.strip()
-
-                if href:
-                    # 相対URLを絶対URLに変換
-                    full_url = urljoin(page.url, href)
-                    # URLからIDを抽出（例: /candidates/12345 → 12345）
-                    applicant_id = _extract_id_from_url(full_url)
-
-                    if applicant_id:
-                        applicants.append({
-                            "id": applicant_id,
-                            "name": name,
-                            "page_url": full_url,
-                        })
-            except Exception as e:
-                logger.warning(f"応募者リンクの解析に失敗: {e}")
-                continue
-
-        # 次のページがあるか確認
-        has_next = await _go_to_next_page(page)
-        if not has_next:
+        show_more = page.get_by_text("さらに表示")
+        if await show_more.count() == 0:
             break
 
-        page_num += 1
-        await asyncio.sleep(wait_sec)
+        try:
+            logger.info(f"「さらに表示」をクリック（{load_round}回目）...")
+            await show_more.first.click()
+            await page.wait_for_load_state("networkidle")
+            await asyncio.sleep(wait_sec)
+            load_round += 1
+        except Exception as e:
+            logger.debug(f"「さらに表示」のクリック終了: {e}")
+            break
 
-    logger.info(f"合計 {len(applicants)} 名の応募者を発見")
-    return applicants
+    logger.info("全応募者の読み込み完了。リンクを収集中...")
+
+    # 全リンク要素を取得
+    applicants = []
+    all_links = page.get_by_role(ApplicantListSelectors.APPLICANT_LINK_ROLE)
+    link_count = await all_links.count()
+
+    for i in range(link_count):
+        link = all_links.nth(i)
+        try:
+            href = await link.get_attribute("href")
+            if not href:
+                continue
+
+            if not _is_applicant_link(href):
+                continue
+
+            text = await link.inner_text()
+            text = text.strip()
+
+            if not text:
+                continue
+
+            name = _extract_name_from_link_text(text)
+            full_url = urljoin(page.url, href)
+            applicant_id = _extract_id_from_url(full_url)
+
+            if applicant_id and name:
+                applicants.append({
+                    "id": applicant_id,
+                    "name": name,
+                    "page_url": full_url,
+                })
+
+        except Exception as e:
+            logger.warning(f"応募者リンクの解析に失敗: {e}")
+            continue
+
+    # 重複を除去（IDベース）
+    seen_ids = set()
+    unique_applicants = []
+    for app in applicants:
+        if app["id"] not in seen_ids:
+            seen_ids.add(app["id"])
+            unique_applicants.append(app)
+
+    logger.info(f"合計 {len(unique_applicants)} 名の応募者を発見")
+    return unique_applicants
 
 
 async def get_attachment_links(page: Page, applicant_url: str) -> list[dict]:
-    """応募者個別ページから添付ファイルリンクを取得する"""
+    """応募者個別ページから添付ファイル情報を取得する"""
     logger.info(f"応募者ページに遷移: {applicant_url}")
     await page.goto(applicant_url, wait_until="networkidle")
 
     attachments = []
 
-    # 添付ファイルリンクを探す
-    links = await page.query_selector_all(ApplicantDetailSelectors.ATTACHMENT_LINK)
+    # 「履歴書・職務経歴書の確認」リンクをクリックして添付セクションを表示
+    try:
+        resume_link = page.get_by_role(
+            "link", name=ApplicantDetailSelectors.RESUME_SECTION_LINK_TEXT
+        )
+        resume_count = await resume_link.count()
+        logger.debug(f"  「履歴書・職務経歴書の確認」リンク数: {resume_count}")
 
-    for link in links:
-        try:
-            href = await link.get_attribute("href")
-            # ファイル名を取得
-            name_el = await link.query_selector(ApplicantDetailSelectors.ATTACHMENT_NAME)
-            filename = await name_el.inner_text() if name_el else await link.inner_text()
-            filename = filename.strip()
+        if resume_count > 0:
+            await resume_link.first.click()
+            await page.wait_for_load_state("networkidle")
+            await asyncio.sleep(2)
+            logger.debug(f"  遷移後URL: {page.url}")
+        else:
+            # テキストで探す（role="link"でない場合のフォールバック）
+            resume_text = page.get_by_text("履歴書・職務経歴書の確認")
+            text_count = await resume_text.count()
+            logger.debug(f"  テキスト「履歴書・職務経歴書の確認」要素数: {text_count}")
+            if text_count > 0:
+                await resume_text.first.click()
+                await page.wait_for_load_state("networkidle")
+                await asyncio.sleep(2)
+    except Exception as e:
+        logger.warning(f"  履歴書セクションの展開に失敗: {e}")
 
-            if not filename:
-                # hrefからファイル名を推測
-                filename = href.split("/")[-1].split("?")[0] if href else "unknown"
+    # デバッグ: ページ内にファイル拡張子が含まれているか確認
+    try:
+        page_text = await page.inner_text("body")
+        for ext in [".pdf", ".docx", ".xlsx"]:
+            if ext.lower() in page_text.lower():
+                logger.debug(f"  ページ内に {ext} テキストあり")
+    except Exception:
+        pass
 
-            if href:
-                full_url = urljoin(page.url, href)
-                file_type = _detect_file_type(filename)
-                attachments.append({
-                    "url": full_url,
-                    "filename": filename,
-                    "file_type": file_type,
-                })
-        except Exception as e:
-            logger.warning(f"添付ファイルリンクの解析に失敗: {e}")
-            continue
+    # ファイル名テキスト（.pdf / .docx / .xlsx 等）を探す
+    # 複数ファイルに対応: 各拡張子で全てのマッチを収集
+    seen_filenames = set()
+    for ext in [".pdf", ".docx", ".doc", ".xlsx", ".xls"]:
+        # 末尾マッチ($)を外し、拡張子を含むテキスト全般にマッチ
+        file_elements = page.get_by_text(re.compile(rf"\{ext}", re.IGNORECASE))
+        count = await file_elements.count()
+        if count > 0:
+            logger.debug(f"  {ext} を含む要素数: {count}")
+
+        for i in range(count):
+            try:
+                el = file_elements.nth(i)
+                raw_text = (await el.inner_text()).strip()
+                if not raw_text:
+                    continue
+
+                # テキスト内からファイル名を抽出（拡張子を含む部分）
+                match = re.search(rf'\S+\{ext}', raw_text, re.IGNORECASE)
+                if match:
+                    filename = match.group().strip()
+                else:
+                    filename = raw_text
+
+                if filename and filename not in seen_filenames:
+                    seen_filenames.add(filename)
+                    attachments.append({
+                        "filename": filename,
+                        "file_type": ext.lstrip(".").lower(),
+                        "element_index": i,
+                    })
+                    logger.debug(f"  ファイル発見: {filename}")
+            except Exception:
+                continue
 
     logger.info(f"  添付ファイル {len(attachments)} 件を発見")
     return attachments
 
 
-async def _go_to_next_page(page: Page) -> bool:
-    """次のページに遷移する。次ページがない場合はFalseを返す"""
+async def download_attachment(page: Page, filename: str, save_dir: str) -> str | None:
+    """添付ファイルをダウンロードする（ファイル名テキスト付近のDLアイコンをクリック）"""
+    from pathlib import Path
+
+    save_path = Path(save_dir) / filename
+
+    # 既にダウンロード済みならスキップ
+    if save_path.exists():
+        logger.info(f"  ダウンロード済み（スキップ）: {filename}")
+        return str(save_path)
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
     try:
-        # 次ページボタンが無効かどうか確認
-        disabled = await page.query_selector(ApplicantListSelectors.NEXT_PAGE_DISABLED)
-        if disabled:
-            return False
+        # ファイル名テキスト要素を見つける
+        file_text = page.get_by_text(filename)
+        if await file_text.count() == 0:
+            logger.warning(f"  ファイル名要素が見つからない: {filename}")
+            return None
 
-        # 次ページボタンをクリック
-        next_btn = await page.query_selector(ApplicantListSelectors.NEXT_PAGE_BUTTON)
-        if not next_btn:
-            return False
+        # ファイル名の近くにあるダウンロードリンク（空テキストのアイコン）を探す
+        # 親要素 or 近隣要素からリンクを探す
+        parent = file_text.locator("..")
+        download_link = parent.get_by_role("link").filter(has_text=re.compile(r"^$"))
 
-        await next_btn.click()
-        await page.wait_for_load_state("networkidle")
-        return True
+        # 親にない場合は、さらに上の階層を探す
+        if await download_link.count() == 0:
+            grandparent = parent.locator("..")
+            download_link = grandparent.get_by_role("link").filter(has_text=re.compile(r"^$"))
+
+        if await download_link.count() == 0:
+            # フォールバック: ファイル名テキスト自体をクリック
+            logger.debug(f"  DLアイコンが見つからないため、ファイル名をクリック: {filename}")
+            async with page.expect_download(timeout=30000) as download_info:
+                await file_text.first.click()
+            download = await download_info.value
+            await download.save_as(str(save_path))
+            logger.info(f"  ダウンロード完了: {filename}")
+            return str(save_path)
+
+        # ダウンロードアイコンをクリック
+        async with page.expect_download(timeout=30000) as download_info:
+            await download_link.first.click()
+
+        download = await download_info.value
+        await download.save_as(str(save_path))
+        logger.info(f"  ダウンロード完了: {filename}")
+        return str(save_path)
 
     except Exception as e:
-        logger.debug(f"次ページへの遷移不可: {e}")
-        return False
+        logger.error(f"  ダウンロード失敗: {filename} - {e}")
+        return None
+
+
+
+def _is_applicant_link(href: str) -> bool:
+    """応募者ページへのリンクかどうか判定する"""
+    href_lower = href.lower()
+    # HRMOSの応募者リンクのパターン
+    applicant_patterns = [
+        "/interviews/",
+        "/candidates/",
+        "/applicants/",
+    ]
+    return any(pattern in href_lower for pattern in applicant_patterns)
+
+
+def _extract_name_from_link_text(text: str) -> str:
+    """リンクテキストから応募者名を抽出する
+
+    テキスト例（改行区切り）:
+      行1: "書類選考 / 評価未入力"
+      行2: "玉井 晴香"           ← 名前
+      行3: "/ 成城大学"
+      行4: "（日時指定なし）"
+    → "玉井 晴香" を抽出
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    # 2行目が名前
+    if len(lines) >= 2:
+        return lines[1]
+
+    # フォールバック: テキスト全体を短く返す
+    return text[:30].strip()
 
 
 def _extract_id_from_url(url: str) -> str:
     """URLから応募者IDを抽出する"""
     parsed = urlparse(url)
-    # パスの最後のセグメントをIDとして使用
-    # 例: /candidates/12345 → 12345
     path_parts = [p for p in parsed.path.split("/") if p]
     if path_parts:
         return path_parts[-1]
-    # フォールバック: URL全体をIDとして使用
     return url
-
-
-def _detect_file_type(filename: str) -> str:
-    """ファイル名から拡張子を判定する"""
-    filename_lower = filename.lower()
-    if filename_lower.endswith(".pdf"):
-        return "pdf"
-    elif filename_lower.endswith(".docx"):
-        return "docx"
-    elif filename_lower.endswith(".doc"):
-        return "doc"
-    elif filename_lower.endswith(".xlsx"):
-        return "xlsx"
-    elif filename_lower.endswith(".xls"):
-        return "xls"
-    else:
-        return "unknown"
