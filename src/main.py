@@ -15,6 +15,7 @@ from src.database.repository import Repository
 from src.parser.document import extract_text
 from src.scanner.keyword import scan_text
 from src.reporter.export import export_csv, export_excel
+from src.reporter.notify import send_report_email
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +159,15 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
             xlsx_path = export_excel(matches, report_dir)
             logger.info(f"レポート出力: {csv_path}")
             logger.info(f"レポート出力: {xlsx_path}")
+
+            # メール通知
+            try:
+                send_report_email(
+                    matches, xlsx_path, config,
+                    total_applicants, scanned_count,
+                )
+            except Exception as e:
+                logger.error(f"メール通知でエラー: {e}")
 
     except Exception as e:
         logger.error(f"スキャン処理で致命的エラー: {e}")

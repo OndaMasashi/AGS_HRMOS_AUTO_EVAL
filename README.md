@@ -77,13 +77,23 @@ scan:
   wait_between_pages: 2              # ページ間の待機秒数
   headless: false                    # true: ブラウザ非表示 / false: ブラウザ表示
   delete_downloads_after: false      # true: 解析後にダウンロードファイルを削除
+
+# メール通知設定（Resend）
+email:
+  enabled: true                          # true: スキャン後にメール送信 / false: 無効
+  api_key: "re_xxxxx"                    # Resend APIキー
+  from: "onboarding@resend.dev"          # 送信元（独自ドメイン設定後に変更）
+  to:
+    - "your-email@example.com"           # 送信先（複数指定可）
+  subject_prefix: "[HRMOS]"              # 件名のプレフィックス
 ```
 
-> **補足**: 認証情報は環境変数でも指定できます。
+> **補足**: 認証情報・APIキーは環境変数でも指定できます。
 >
 > ```bash
 > set HRMOS_EMAIL=your-email@example.com
 > set HRMOS_PASSWORD=your-password
+> set RESEND_API_KEY=re_xxxxx
 > ```
 
 ## 使い方
@@ -118,6 +128,62 @@ python run.py scan
 python run.py -v scan
 ```
 
+## メール通知（Resend）- オプション
+
+> **この機能は任意です。** 設定しなくてもスキャン・レポート出力は通常通り動作します。メール通知が不要な場合は `email.enabled: false`（デフォルト）のままで問題ありません。
+
+スキャンでキーワードマッチが見つかった場合、結果をメールで自動通知します。Excelレポートが添付され、本文にはマッチ一覧のサマリーが含まれます。
+
+### セットアップ
+
+1. [Resend](https://resend.com) でアカウントを作成し、APIキーを取得
+2. `config.yaml` の `email` セクションを設定
+
+```yaml
+email:
+  enabled: true
+  api_key: "re_xxxxx"
+  from: "onboarding@resend.dev"
+  to:
+    - "your-email@example.com"
+  subject_prefix: "[HRMOS]"
+```
+
+> **注意**: テスト用送信元 `onboarding@resend.dev` はResendアカウントに登録したメールアドレスにのみ送信可能です。他の宛先にも送る場合はResendで独自ドメインを認証してください。
+
+### 動作条件
+
+- `email.enabled: true` であること
+- スキャン結果のマッチが1件以上あること（0件の場合はメール送信しません）
+
+## タスクスケジューラ（自動実行）
+
+Windowsタスクスケジューラで定期実行を設定できます。
+
+### 登録コマンド例
+
+```powershell
+# 平日 12:00 に実行
+schtasks /create /tn "HRMOS_Scan_Noon" /tr "\"C:\Users\<ユーザー名>\AppData\Local\Programs\Python\Python313\python.exe\" \"C:\work\AGS_HRMOS_RETRIEVE\run.py\" scan" /sc weekly /d MON,TUE,WED,THU,FRI /st 12:00
+
+# 平日 17:00 に実行
+schtasks /create /tn "HRMOS_Scan_Evening" /tr "\"C:\Users\<ユーザー名>\AppData\Local\Programs\Python\Python313\python.exe\" \"C:\work\AGS_HRMOS_RETRIEVE\run.py\" scan" /sc weekly /d MON,TUE,WED,THU,FRI /st 17:00
+```
+
+### 管理
+
+```powershell
+# タスク一覧の確認
+schtasks /query /tn HRMOS_Scan_Noon
+schtasks /query /tn HRMOS_Scan_Evening
+
+# タスクの削除
+schtasks /delete /tn "HRMOS_Scan_Noon" /f
+schtasks /delete /tn "HRMOS_Scan_Evening" /f
+```
+
+> **注意**: PCがログオン状態でないとタスクは実行されません（Interactive onlyモード）。タスクスケジューラのGUIからも確認・編集が可能です。
+
 ## 出力ファイル
 
 | 種類              | 場所                                    | 説明                                 |
@@ -149,7 +215,8 @@ AGS_HRMOS_RETRIEVE/
 │   │   ├── models.py       # SQLiteスキーマ定義
 │   │   └── repository.py   # データアクセス層
 │   └── reporter/
-│       └── export.py       # CSV/Excelレポート出力
+│       ├── export.py       # CSV/Excelレポート出力
+│       └── notify.py       # メール通知（Resend）
 └── data/                   # 実行時に自動生成
     ├── downloads/
     ├── reports/

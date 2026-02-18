@@ -26,6 +26,11 @@ def load_config(config_path: str = "config.yaml") -> dict:
     if env_password:
         config["credentials"]["password"] = env_password
 
+    # 環境変数でResend APIキーを上書き
+    env_resend_key = os.environ.get("RESEND_API_KEY")
+    if env_resend_key:
+        config.setdefault("email", {})["api_key"] = env_resend_key
+
     # 認証情報の検証
     if not config["credentials"].get("email") or not config["credentials"].get("password"):
         raise ValueError(

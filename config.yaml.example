@@ -20,3 +20,12 @@ scan:
   wait_between_pages: 2        # ページ間の待機秒数（サーバー負荷軽減）
   headless: false              # true: ブラウザ非表示 / false: ブラウザ表示
   delete_downloads_after: false # true: 解析後にダウンロードファイルを削除
+
+# メール通知設定（Resend）
+email:
+  enabled: false
+  api_key: ""                    # 環境変数 RESEND_API_KEY でも指定可
+  from: "onboarding@resend.dev"  # 送信元（独自ドメイン設定後に変更）
+  to:
+    - ""
+  subject_prefix: "[HRMOS]"
