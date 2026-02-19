@@ -39,4 +39,18 @@ def load_config(config_path: str = "config.yaml") -> dict:
             "HRMOS_EMAIL / HRMOS_PASSWORD を設定してください。"
         )
 
+    # 評価基準の検証
+    criteria = config.get("evaluation_criteria")
+    if not criteria or not isinstance(criteria, list):
+        raise ValueError(
+            "評価基準が設定されていません。\n"
+            "config.yaml の evaluation_criteria セクションを設定してください。"
+        )
+
+    for i, c in enumerate(criteria):
+        if not c.get("name") or not c.get("description"):
+            raise ValueError(
+                f"evaluation_criteria[{i}] に name と description が必要です。"
+            )
+
     return config

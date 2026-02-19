@@ -7,11 +7,32 @@ credentials:
   email: ""
   password: ""
 
-# 検索キーワード（大文字/小文字を区別しない）
-keywords:
-  - "AI"
-  - "機械学習"
-  - "Python"
+# AI評価基準
+evaluation_criteria:
+  - name: "技術スキル"
+    description: "プログラミング言語（Python, JavaScript等）、AI/ML、クラウド（AWS, GCP等）の技術経験と深さ"
+  - name: "マネジメント経験"
+    description: "チームリーダー、プロジェクトマネジメント、部下育成の経験"
+  - name: "コミュニケーション能力"
+    description: "文書の論理構成、表現力、対人スキルの記述"
+
+# AI評価設定
+evaluation:
+  system_instructions: |
+    書類の内容に基づいて客観的に評価してください。
+    推測ではなく、書類に明記されている情報のみを根拠にしてください。
+  max_retries: 3
+  retry_delay: 5
+  timeout: 120
+  max_text_chars: 80000
+  shell: false
+
+# 面接質問生成設定
+interview_questions:
+  count: 3
+  perspective: |
+    応募者の経歴や技術スキルの深掘り、チームワークやコミュニケーション能力の確認、
+    志望動機やキャリアビジョンの把握を重視してください。
 
 scan:
   download_dir: "./data/downloads"

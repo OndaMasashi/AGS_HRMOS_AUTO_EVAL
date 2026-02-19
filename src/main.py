@@ -1,4 +1,4 @@
-"""メインオーケストレーター - スキャン処理の全体制御"""
+"""メインオーケストレーター - AI評価処理の全体制御"""
 
 import asyncio
 import logging
@@ -13,8 +13,10 @@ from src.config import load_config
 from src.database.models import init_db
 from src.database.repository import Repository
 from src.parser.document import extract_text
-from src.scanner.keyword import scan_text
-from src.reporter.export import export_csv, export_excel
+from src.evaluator.claude_client import call_claude, ClaudeClientError
+from src.evaluator.prompt_builder import build_evaluation_prompt
+from src.evaluator.response_parser import parse_evaluation_response, ParseError
+from src.reporter.export import export_evaluation_excel
 from src.reporter.notify import send_report_email
 
 logger = logging.getLogger(__name__)
@@ -26,21 +28,23 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
     conn = init_db(config["scan"]["db_path"])
     repo = Repository(conn)
 
-    keywords = config["keywords"]
+    criteria = config["evaluation_criteria"]
+    criteria_names = [c["name"] for c in criteria]
+    interview_config = config.get("interview_questions", {})
     download_dir = config["scan"]["download_dir"]
     wait_sec = config["scan"].get("wait_between_pages", 2)
     headless = config["scan"].get("headless", False)
     delete_after = config["scan"].get("delete_downloads_after", False)
 
-    logger.info(f"検索キーワード: {keywords}")
+    logger.info(f"評価基準: {criteria_names}")
 
     # スキャン実行を開始
     run_id = repo.create_scan_run()
-    logger.info(f"スキャン実行開始: {run_id}")
+    logger.info(f"評価実行開始: {run_id}")
 
     total_applicants = 0
     scanned_count = 0
-    match_count = 0
+    eval_count = 0
 
     try:
         async with async_playwright() as p:
@@ -76,7 +80,7 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
             else:
                 targets = repo.get_pending_applicants()
 
-            logger.info(f"スキャン対象: {len(targets)} 名 / 全 {total_applicants} 名")
+            logger.info(f"評価対象: {len(targets)} 名 / 全 {total_applicants} 名")
 
             # 各応募者を処理
             for i, applicant in enumerate(targets, 1):
@@ -96,8 +100,10 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
                         scanned_count += 1
                         continue
 
-                    # 各添付ファイルを処理
+                    # 各添付ファイルを処理し、テキストを結合
                     app_download_dir = str(Path(download_dir) / app_id)
+                    all_texts = []
+                    last_doc_id = None
 
                     for att in attachments:
                         # ダウンロード
@@ -117,16 +123,36 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
                             app_id, att["filename"], att["file_type"],
                             file_path, len(text)
                         )
+                        last_doc_id = doc_id
+                        all_texts.append(text)
 
-                        # キーワード検索
-                        matches = scan_text(text, keywords)
+                    # テキストが抽出できた場合、AI評価を実行
+                    combined_text = "\n\n---\n\n".join(all_texts)
 
-                        for m in matches:
-                            repo.add_match(
-                                app_id, doc_id, m["keyword"],
-                                m["context"], run_id
+                    if combined_text and last_doc_id is not None:
+                        try:
+                            prompt = build_evaluation_prompt(
+                                resume_text=combined_text,
+                                criteria=criteria,
+                                system_instructions=config.get("evaluation", {}).get("system_instructions", ""),
+                                interview_config=interview_config,
                             )
-                            match_count += 1
+
+                            logger.info(f"  Claude CLIで評価中...")
+                            raw_response = call_claude(prompt, config)
+
+                            evaluation_data = parse_evaluation_response(raw_response, criteria_names)
+
+                            repo.add_evaluations_batch(
+                                app_id, last_doc_id, evaluation_data, run_id, raw_response
+                            )
+                            eval_count += 1
+                            logger.info(
+                                f"  評価完了: 合計 {evaluation_data['total_score']} 点"
+                            )
+
+                        except (ClaudeClientError, ParseError) as e:
+                            logger.error(f"  AI評価エラー ({app_name}): {e}")
 
                     repo.mark_applicant_scanned(app_id)
                     scanned_count += 1
@@ -145,32 +171,33 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
             await browser.close()
 
         # スキャン完了
-        repo.complete_scan_run(run_id, total_applicants, scanned_count, match_count)
+        repo.complete_scan_run(run_id, total_applicants, scanned_count, eval_count)
         logger.info(
-            f"スキャン完了: {scanned_count}/{total_applicants} 名処理, "
-            f"{match_count} 件のキーワードマッチ"
+            f"評価完了: {scanned_count}/{total_applicants} 名処理, "
+            f"{eval_count} 名のAI評価完了"
         )
 
         # レポート自動出力
-        if match_count > 0:
-            matches = repo.get_matches_for_run(run_id)
+        if eval_count > 0:
+            evaluations = repo.get_evaluations_for_run(run_id)
             report_dir = config["scan"]["report_dir"]
-            csv_path = export_csv(matches, report_dir)
-            xlsx_path = export_excel(matches, report_dir)
-            logger.info(f"レポート出力: {csv_path}")
+            question_count = interview_config.get("count", 3)
+            xlsx_path = export_evaluation_excel(
+                evaluations, criteria_names, report_dir, question_count
+            )
             logger.info(f"レポート出力: {xlsx_path}")
 
             # メール通知
             try:
                 send_report_email(
-                    matches, xlsx_path, config,
+                    evaluations, criteria_names, xlsx_path, config,
                     total_applicants, scanned_count,
                 )
             except Exception as e:
                 logger.error(f"メール通知でエラー: {e}")
 
     except Exception as e:
-        logger.error(f"スキャン処理で致命的エラー: {e}")
+        logger.error(f"評価処理で致命的エラー: {e}")
         repo.fail_scan_run(run_id)
         raise
     finally:
@@ -183,24 +210,29 @@ def run_report(config_path: str = "config.yaml", run_id: str | None = None):
     conn = init_db(config["scan"]["db_path"])
     repo = Repository(conn)
 
-    if run_id:
-        matches = repo.get_matches_for_run(run_id)
-    else:
-        matches = repo.get_all_matches()
+    criteria = config["evaluation_criteria"]
+    criteria_names = [c["name"] for c in criteria]
+    interview_config = config.get("interview_questions", {})
+    question_count = interview_config.get("count", 3)
 
-    if not matches:
-        logger.info("マッチ結果がありません。")
+    if run_id:
+        evaluations = repo.get_evaluations_for_run(run_id)
+    else:
+        evaluations = repo.get_all_evaluations()
+
+    if not evaluations:
+        logger.info("評価結果がありません。")
         conn.close()
         return
 
     report_dir = config["scan"]["report_dir"]
-    csv_path = export_csv(matches, report_dir)
-    xlsx_path = export_excel(matches, report_dir)
+    xlsx_path = export_evaluation_excel(
+        evaluations, criteria_names, report_dir, question_count
+    )
 
     print(f"\nレポート出力完了:")
-    print(f"  CSV:   {csv_path}")
     print(f"  Excel: {xlsx_path}")
-    print(f"  件数:  {len(matches)} 件")
+    print(f"  評価者数: {len(set(ev['applicant_id'] for ev in evaluations))} 名")
 
     conn.close()
 
@@ -213,21 +245,21 @@ def show_status(config_path: str = "config.yaml"):
 
     # 応募者統計
     stats = repo.get_applicant_stats()
-    print("\n=== 応募者スキャン状況 ===")
+    print("\n=== 応募者評価状況 ===")
     print(f"  全応募者:      {stats['total']} 名")
-    print(f"  スキャン済み:  {stats['scanned']} 名")
-    print(f"  未スキャン:    {stats['pending']} 名")
+    print(f"  評価済み:      {stats['scanned']} 名")
+    print(f"  未評価:        {stats['pending']} 名")
     print(f"  エラー:        {stats['errors']} 名")
 
     # 実行履歴
     runs = repo.get_scan_runs(limit=5)
     if runs:
-        print("\n=== 直近のスキャン実行履歴 ===")
+        print("\n=== 直近の評価実行履歴 ===")
         for run in runs:
             print(
                 f"  [{run['status']}] {run['started_at']} - "
                 f"{run['scanned_count']}/{run['total_applicants']} 名, "
-                f"{run['match_count']} マッチ"
+                f"{run['match_count']} 名評価完了"
             )
 
     conn.close()

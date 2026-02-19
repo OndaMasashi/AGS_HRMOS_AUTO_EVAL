@@ -42,7 +42,35 @@ CREATE TABLE IF NOT EXISTS scan_runs (
     match_count INTEGER,
     status TEXT
 );
+
+CREATE TABLE IF NOT EXISTS evaluations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    applicant_id TEXT REFERENCES applicants(id),
+    document_id INTEGER REFERENCES documents(id),
+    criteria_name TEXT,
+    score INTEGER,
+    comment TEXT,
+    total_score INTEGER,
+    overall_comment TEXT,
+    interview_questions TEXT,
+    applicant_gender TEXT,
+    applicant_age INTEGER,
+    scan_run_id TEXT,
+    raw_response TEXT,
+    evaluated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 """
+
+
+def _migrate_evaluations(conn: sqlite3.Connection):
+    """既存DBのevaluationsテーブルにカラムを追加（マイグレーション）"""
+    cursor = conn.execute("PRAGMA table_info(evaluations)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "applicant_gender" not in columns:
+        conn.execute("ALTER TABLE evaluations ADD COLUMN applicant_gender TEXT")
+    if "applicant_age" not in columns:
+        conn.execute("ALTER TABLE evaluations ADD COLUMN applicant_age INTEGER")
+    conn.commit()
 
 
 def init_db(db_path: str) -> sqlite3.Connection:
@@ -52,5 +80,6 @@ def init_db(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA_SQL)
+    _migrate_evaluations(conn)
     conn.commit()
     return conn

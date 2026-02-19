@@ -1,4 +1,4 @@
-"""CLIエントリーポイント - HRMOS採用 キーワード検知ツール"""
+"""CLIエントリーポイント - HRMOS採用 応募者書類AI評価ツール"""
 
 import argparse
 import asyncio
@@ -22,7 +22,7 @@ def setup_logging(verbose: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="HRMOS採用 応募者書類キーワード検知ツール"
+        description="HRMOS採用 応募者書類AI評価ツール"
     )
     parser.add_argument(
         "--config", default="config.yaml",
@@ -36,21 +36,21 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="実行コマンド")
 
     # scan コマンド
-    scan_parser = subparsers.add_parser("scan", help="応募者書類をスキャンしてキーワードを検知")
+    scan_parser = subparsers.add_parser("scan", help="応募者書類をAI評価する")
     scan_parser.add_argument(
         "--all", action="store_true", dest="rescan_all",
-        help="全応募者を再スキャン（スキャン済みも含む）"
+        help="全応募者を再評価（評価済みも含む）"
     )
 
     # report コマンド
-    report_parser = subparsers.add_parser("report", help="検知結果をCSV/Excelに出力")
+    report_parser = subparsers.add_parser("report", help="AI評価結果をExcelに出力")
     report_parser.add_argument(
         "--run-id", default=None,
         help="特定のスキャン実行IDの結果のみ出力"
     )
 
     # status コマンド
-    subparsers.add_parser("status", help="スキャン進捗状況を表示")
+    subparsers.add_parser("status", help="評価進捗状況を表示")
 
     args = parser.parse_args()
     setup_logging(args.verbose)

@@ -1,9 +1,10 @@
-"""メール通知モジュール - Resendを使用してスキャン結果をメール送信"""
+"""メール通知モジュール - Resendを使用してAI評価結果をメール送信"""
 
 import base64
+import json
 import logging
 import os
-from collections import defaultdict
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
@@ -16,13 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 def send_report_email(
-    matches: list[dict],
+    evaluations: list[dict],
+    criteria_names: list[str],
     xlsx_path: str,
     config: dict,
     total_applicants: int,
     scanned_count: int,
 ) -> bool:
-    """スキャン結果をメールで送信する
+    """AI評価結果をメールで送信する
 
     Returns:
         True: 送信成功, False: 送信失敗またはスキップ
@@ -37,7 +39,6 @@ def send_report_email(
         logger.warning("resendパッケージが未インストールです。pip install resend で追加してください。")
         return False
 
-    # APIキー（環境変数を優先）
     api_key = os.environ.get("RESEND_API_KEY") or email_config.get("api_key", "")
     if not api_key:
         logger.warning("Resend APIキーが設定されていません。メール送信をスキップします。")
@@ -54,13 +55,14 @@ def send_report_email(
         return False
 
     today = datetime.now().strftime("%Y-%m-%d")
-    match_count = len(matches)
-    subject = f"{prefix} キーワードマッチ {match_count}件検出 ({today})"
 
-    # 本文を組み立て
-    html = _build_html(matches, total_applicants, scanned_count, today)
+    # 応募者ごとにグルーピングして件数算出
+    applicant_ids = set(ev["applicant_id"] for ev in evaluations)
+    eval_count = len(applicant_ids)
 
-    # 添付ファイル
+    subject = f"{prefix} AI評価完了 {eval_count}名 ({today})"
+    html = _build_html(evaluations, criteria_names, total_applicants, scanned_count, today)
+
     attachments = []
     xlsx_file = Path(xlsx_path)
     if xlsx_file.exists():
@@ -90,39 +92,54 @@ def send_report_email(
 
 
 def _build_html(
-    matches: list[dict],
+    evaluations: list[dict],
+    criteria_names: list[str],
     total_applicants: int,
     scanned_count: int,
     today: str,
 ) -> str:
     """メール本文のHTMLを生成する"""
-    match_count = len(matches)
+    # 応募者ごとにグルーピング
+    by_applicant = OrderedDict()
+    for ev in evaluations:
+        app_id = ev["applicant_id"]
+        if app_id not in by_applicant:
+            by_applicant[app_id] = {
+                "name": ev.get("applicant_name", "不明"),
+                "total_score": ev.get("total_score", 0),
+                "overall_comment": ev.get("overall_comment", ""),
+            }
 
-    # 応募者ごとにキーワードをグルーピング
-    by_applicant = defaultdict(set)
-    for m in matches:
-        name = m.get("applicant_name", "不明")
-        keyword = m.get("keyword", "")
-        by_applicant[name].add(keyword)
+    eval_count = len(by_applicant)
 
-    applicant_lines = ""
-    for name, keywords in by_applicant.items():
-        kw_str = ", ".join(sorted(keywords))
-        applicant_lines += f"<li><strong>{name}</strong>: {kw_str}</li>\n"
+    applicant_rows = ""
+    for app_data in by_applicant.values():
+        applicant_rows += (
+            f"<tr>"
+            f"<td style='padding: 4px 8px; border: 1px solid #ddd;'>{app_data['name']}</td>"
+            f"<td style='padding: 4px 8px; border: 1px solid #ddd; text-align: center;'>{app_data['total_score']}</td>"
+            f"<td style='padding: 4px 8px; border: 1px solid #ddd;'>{app_data['overall_comment'][:100]}</td>"
+            f"</tr>\n"
+        )
 
     return f"""\
-<div style="font-family: sans-serif; color: #333; max-width: 600px;">
-  <h2 style="color: #4472C4;">{today} HRMOSスキャン結果</h2>
+<div style="font-family: sans-serif; color: #333; max-width: 700px;">
+  <h2 style="color: #2F5496;">{today} HRMOS AI評価結果</h2>
   <table style="border-collapse: collapse; margin: 16px 0;">
     <tr><td style="padding: 4px 12px;">スキャン対象</td><td><strong>{total_applicants}名</strong></td></tr>
     <tr><td style="padding: 4px 12px;">処理済み</td><td><strong>{scanned_count}名</strong></td></tr>
-    <tr><td style="padding: 4px 12px;">マッチ件数</td><td><strong>{match_count}件</strong></td></tr>
+    <tr><td style="padding: 4px 12px;">評価完了</td><td><strong>{eval_count}名</strong></td></tr>
   </table>
 
-  <h3>マッチ一覧</h3>
-  <ul>
-    {applicant_lines}
-  </ul>
+  <h3>評価サマリ</h3>
+  <table style="border-collapse: collapse; width: 100%;">
+    <tr style="background-color: #2F5496; color: white;">
+      <th style="padding: 6px 8px; border: 1px solid #ddd;">応募者名</th>
+      <th style="padding: 6px 8px; border: 1px solid #ddd;">合計点</th>
+      <th style="padding: 6px 8px; border: 1px solid #ddd;">総合評価</th>
+    </tr>
+    {applicant_rows}
+  </table>
 
   <p style="color: #666; font-size: 13px;">詳細は添付のExcelファイルをご確認ください。</p>
 </div>

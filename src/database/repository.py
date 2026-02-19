@@ -180,3 +180,69 @@ class Repository:
             (scan_run_id,),
         ).fetchone()
         return row["cnt"]
+
+    # === evaluations ===
+
+    def add_evaluations_batch(
+        self, applicant_id: str, document_id: int,
+        evaluation_data: dict, scan_run_id: str, raw_response: str = ""
+    ):
+        """AI評価結果を一括記録（1応募者分）"""
+        import json
+
+        total_score = evaluation_data.get("total_score", 0)
+        overall_comment = evaluation_data.get("overall_comment", "")
+        interview_questions = json.dumps(
+            evaluation_data.get("interview_questions", []),
+            ensure_ascii=False
+        )
+        applicant_gender = evaluation_data.get("applicant_gender", "不明")
+        applicant_age = evaluation_data.get("applicant_age")
+
+        for eval_item in evaluation_data.get("evaluations", []):
+            self.conn.execute(
+                "INSERT INTO evaluations "
+                "(applicant_id, document_id, criteria_name, score, comment, "
+                " total_score, overall_comment, interview_questions, "
+                " applicant_gender, applicant_age, scan_run_id, raw_response) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (applicant_id, document_id,
+                 eval_item["criteria_name"], eval_item["score"], eval_item["comment"],
+                 total_score, overall_comment, interview_questions,
+                 applicant_gender, applicant_age,
+                 scan_run_id, raw_response),
+            )
+        self.conn.commit()
+
+    def get_evaluations_for_run(self, scan_run_id: str) -> list[dict]:
+        """特定のスキャン実行の評価結果を取得"""
+        rows = self.conn.execute(
+            "SELECT e.*, a.name as applicant_name, a.page_url, d.filename "
+            "FROM evaluations e "
+            "JOIN applicants a ON e.applicant_id = a.id "
+            "JOIN documents d ON e.document_id = d.id "
+            "WHERE e.scan_run_id = ? "
+            "ORDER BY a.name, e.criteria_name",
+            (scan_run_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_all_evaluations(self) -> list[dict]:
+        """全評価結果を取得"""
+        rows = self.conn.execute(
+            "SELECT e.*, a.name as applicant_name, a.page_url, d.filename "
+            "FROM evaluations e "
+            "JOIN applicants a ON e.applicant_id = a.id "
+            "JOIN documents d ON e.document_id = d.id "
+            "ORDER BY e.evaluated_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_evaluation_count_for_run(self, scan_run_id: str) -> int:
+        """特定のスキャン実行の評価済み応募者数を取得"""
+        row = self.conn.execute(
+            "SELECT COUNT(DISTINCT applicant_id) as cnt "
+            "FROM evaluations WHERE scan_run_id = ?",
+            (scan_run_id,),
+        ).fetchone()
+        return row["cnt"]
