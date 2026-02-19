@@ -5,7 +5,8 @@
       "WebFetch(domain:www.tracom.co.jp)",
       "WebFetch(domain:hrmos.co)",
       "WebFetch(domain:playwright.dev)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(git -C \"c:\\\\work\\\\AGS_HRMOS_RETRIEVE\" remote -v)"
     ]
   }
 }
