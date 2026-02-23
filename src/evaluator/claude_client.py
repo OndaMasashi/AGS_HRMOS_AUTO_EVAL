@@ -1,6 +1,7 @@
 """Claude CLIクライアント - subprocess経由でClaude AIを呼び出す"""
 
 import logging
+import os
 import subprocess
 import time
 
@@ -31,6 +32,10 @@ def call_claude(prompt: str, config: dict) -> str:
         try:
             logger.debug(f"Claude CLI呼び出し (試行 {attempt}/{max_retries})")
 
+            # CLAUDECODE環境変数を除外（ネストセッション検出を回避）
+            env = os.environ.copy()
+            env.pop("CLAUDECODE", None)
+
             result = subprocess.run(
                 ["claude", "-p"],
                 input=prompt,
@@ -39,6 +44,7 @@ def call_claude(prompt: str, config: dict) -> str:
                 timeout=timeout,
                 encoding="utf-8",
                 shell=use_shell,
+                env=env,
             )
 
             if result.returncode != 0:
