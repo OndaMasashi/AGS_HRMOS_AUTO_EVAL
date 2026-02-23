@@ -9,15 +9,24 @@ credentials:
 
 # AI評価基準
 evaluation_criteria:
-  - name: "技術スキル"
-    description: "プログラミング言語（Python, JavaScript等）、AI/ML、クラウド（AWS, GCP等）の技術経験と深さ"
+  - name: "IT業界経験年数"
+    description: "IT業界としての経験年数を経歴の執務期間と経験内容から判断してください。長いほど評価を高くします。"
+  - name: "プログラミング経験"
+    description: "IT開発工程におけるプログラミング開発経験（Python, JavaScript, vba等）の経験と深さ"
+  - name: "設計経験"
+    description: "IT開発の上流工程である要件定義や設計工程に関わる経験と深さ"
   - name: "マネジメント経験"
-    description: "チームリーダー、プロジェクトマネジメント、部下育成の経験"
-  - name: "コミュニケーション能力"
-    description: "文書の論理構成、表現力、対人スキルの記述"
+    description: "チームリーダー、プロジェクトマネジメント、プロジェクトリーダー、サブリーダー等の経験の有無と深さ"
+  - name: "資格保有状況"
+    description: "IT関連資格（AWS認定、PMP、ITIL、等）の有無と希少な資格の有無の状況"
+  - name: "同一環境での長期執務"
+    description: "転職回数や1回あたりの転職の間隔が2年未満であったり、1回あたりの案件の期間が3ヵ月以内が多い場合は評価を下げる"
+  - name: "自己学習・成長意欲"
+    description: "自己学習として業務以外で何か意欲的に取り組んでいることが分かる場合評価をする。判断できない場合は評価無しとする"
 
 # AI評価設定
 evaluation:
+  provider: "claude"             # "claude" or "gemini"（デフォルト: claude）
   system_instructions: |
     書類の内容に基づいて客観的に評価してください。
     推測ではなく、書類に明記されている情報のみを根拠にしてください。
@@ -31,8 +40,8 @@ evaluation:
 interview_questions:
   count: 3
   perspective: |
-    応募者の経歴や技術スキルの深掘り、チームワークやコミュニケーション能力の確認、
-    志望動機やキャリアビジョンの把握を重視してください。
+    応募者の自律性や自己成長意欲を確認する質問、マネジメント面でQCDに関する考え方を問う質問、
+    スキルが伴っており表面的に業務を行ってきていないことを確認する質問、などの履歴書から読み取れない意識面を問う質問をしたい。
 
 scan:
   download_dir: "./data/downloads"

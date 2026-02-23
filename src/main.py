@@ -13,7 +13,7 @@ from src.config import load_config
 from src.database.models import init_db
 from src.database.repository import Repository
 from src.parser.document import extract_text
-from src.evaluator.claude_client import call_claude, ClaudeClientError
+from src.evaluator.llm_client import call_llm, LLMClientError
 from src.evaluator.prompt_builder import build_evaluation_prompt
 from src.evaluator.response_parser import parse_evaluation_response, ParseError
 from src.reporter.export import export_evaluation_excel
@@ -138,8 +138,9 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
                                 interview_config=interview_config,
                             )
 
-                            logger.info(f"  Claude CLIで評価中...")
-                            raw_response = call_claude(prompt, config)
+                            provider = config.get("evaluation", {}).get("provider", "claude")
+                            logger.info(f"  {provider.capitalize()} CLIで評価中...")
+                            raw_response = call_llm(prompt, config)
 
                             evaluation_data = parse_evaluation_response(raw_response, criteria_names)
 
@@ -151,7 +152,7 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
                                 f"  評価完了: 合計 {evaluation_data['total_score']} 点"
                             )
 
-                        except (ClaudeClientError, ParseError) as e:
+                        except (LLMClientError, ParseError) as e:
                             logger.error(f"  AI評価エラー ({app_name}): {e}")
 
                     repo.mark_applicant_scanned(app_id)

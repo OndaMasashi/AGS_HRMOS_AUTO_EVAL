@@ -5,7 +5,7 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 ## 主な機能
 
 - 応募者書類の自動ダウンロード（PDF/Word/Excel対応）
-- Claude CLIによるAI自動評価（設定した評価基準に基づく1〜5点のスコアリング）
+- Claude CLI / Gemini CLIによるAI自動評価（設定した評価基準に基づく1〜5点のスコアリング、configで切替可能）
 - 面接質問候補の自動生成（応募者ごとに3問）
 - Excel一覧表の自動出力（応募者×評価項目のマトリクス形式）
 - メール通知（Resend API、オプション）
@@ -16,7 +16,8 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 - **OS**: Windows 10/11
 - **Python**: 3.10 以上
 - **ブラウザ**: Chromium（Playwrightが自動インストール）
-- **Claude CLI**: インストール済みであること（claude.aiライセンス使用）
+- **Claude CLI**: インストール済みであること（claude.aiライセンス使用）※デフォルト
+- **Gemini CLI**: Geminiを使う場合（`npm install -g @google/gemini-cli`）※オプション
 
 ## セットアップ手順
 
@@ -47,12 +48,19 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-### 5. Claude CLIの確認
+### 5. LLM CLIの確認
 
-Claude CLIがインストール済みで、ターミナルから `claude` コマンドが実行できることを確認してください。
+デフォルトではClaude CLIを使用します。ターミナルから `claude` コマンドが実行できることを確認してください。
 
 ```bash
 claude --version
+```
+
+Gemini CLIを使用する場合は、別途インストールが必要です。
+
+```bash
+npm install -g @google/gemini-cli
+gemini --version
 ```
 
 ### 6. 設定ファイルの作成
@@ -90,14 +98,15 @@ evaluation_criteria:
 
 # AI評価設定
 evaluation:
+  provider: "claude"       # "claude" or "gemini"（デフォルト: claude）
   system_instructions: |
     書類の内容に基づいて客観的に評価してください。
     推測ではなく、書類に明記されている情報のみを根拠にしてください。
-  max_retries: 3           # Claude CLI呼び出しのリトライ回数
+  max_retries: 3           # LLM CLI呼び出しのリトライ回数
   retry_delay: 5           # リトライ間隔（秒）
   timeout: 120             # タイムアウト（秒）
   max_text_chars: 80000    # テキストの最大文字数（超過分は切り詰め）
-  shell: false             # true: claudeが.cmd/.batの場合に必要
+  shell: false             # true: CLIが.cmd/.batの場合に必要
 
 # 面接質問生成設定
 interview_questions:
@@ -251,9 +260,11 @@ AGS_HRMOS_AUTO_EVAL/
 │   ├── parser/
 │   │   └── document.py     # PDF/Word/Excelテキスト抽出
 │   ├── evaluator/
-│   │   ├── claude_client.py   # Claude CLI呼び出し（リトライ付き）
-│   │   ├── prompt_builder.py  # 評価プロンプト構築
-│   │   └── response_parser.py # JSON応答パース・検証
+│   │   ├── llm_client.py        # LLMプロバイダー切替（Claude/Gemini）
+│   │   ├── claude_client.py     # Claude CLI呼び出し（リトライ付き）
+│   │   ├── gemini_client.py     # Gemini CLI呼び出し（リトライ付き）
+│   │   ├── prompt_builder.py    # 評価プロンプト構築
+│   │   └── response_parser.py   # JSON応答パース・検証
 │   ├── database/
 │   │   ├── models.py       # SQLiteスキーマ定義
 │   │   └── repository.py   # データアクセス層
@@ -278,7 +289,7 @@ evaluation_criteria:
 
 - 各項目は1〜5点でスコアリングされます
 - `description` を具体的に書くほど評価精度が上がります
-- 項目数に制限はありませんが、多すぎるとClaude CLIの処理時間が長くなります
+- 項目数に制限はありませんが、多すぎるとLLM CLIの処理時間が長くなります
 
 面接質問の観点も `interview_questions.perspective` で自由にカスタマイズできます。
 
@@ -290,13 +301,17 @@ evaluation_criteria:
 - HRMOS側でパスワード変更やアカウントロックが発生していないか確認してください。
 - `headless: false` にしてブラウザ画面を見ながら原因を特定してください。
 
-### Claude CLIが見つからない
+### LLM CLIが見つからない
 
 ```bash
+# Claudeの場合
 claude --version
+
+# Geminiの場合
+gemini --version
 ```
 
-でバージョンが表示されることを確認してください。表示されない場合はClaude CLIをインストールしてください。
+使用するプロバイダーのCLIがインストール済みか確認してください。Geminiの場合は `npm install -g @google/gemini-cli` でインストールできます。
 
 ### AI評価がタイムアウトする
 
