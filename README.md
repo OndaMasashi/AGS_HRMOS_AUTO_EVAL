@@ -332,3 +332,11 @@ playwright install chromium --with-deps
 del storage_state.json
 python run.py scan
 ```
+
+## 改修課題管理（improvement_list/）
+
+`improvement_list/` ディレクトリに改修課題を管理しています。
+
+- 日付ベースのファイル（例: `20260225.md`）に課題を箇条書きで記載
+- 課題の対応が完了したら、ファイルごと削除する
+- 対応した機能については、必要に応じて本READMEへ反映する

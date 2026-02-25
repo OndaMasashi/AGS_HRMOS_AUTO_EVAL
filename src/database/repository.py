@@ -72,6 +72,13 @@ class Repository:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_retryable_applicants(self) -> list[dict]:
+        """未スキャン＋エラーの応募者を取得（リトライ対象）"""
+        rows = self.conn.execute(
+            "SELECT * FROM applicants WHERE status IN ('pending', 'error') ORDER BY created_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def mark_applicant_scanned(self, applicant_id: str):
         """応募者をスキャン済みにする"""
         self.conn.execute(
@@ -112,6 +119,13 @@ class Repository:
             "FROM applicants"
         ).fetchone()
         return dict(row)
+
+    def delete_evaluations_for_applicant(self, applicant_id: str):
+        """応募者の既存評価を削除（再評価前のクリーンアップ）"""
+        self.conn.execute(
+            "DELETE FROM evaluations WHERE applicant_id = ?", (applicant_id,)
+        )
+        self.conn.commit()
 
     # === documents ===
 

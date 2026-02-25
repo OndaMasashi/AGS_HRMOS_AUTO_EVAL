@@ -20,6 +20,10 @@ async def collect_applicant_links(page: Page, config: dict) -> list[dict]:
     logger.info(f"応募者一覧ページに遷移: {base_url}")
     await page.goto(base_url, wait_until="networkidle")
 
+    # NOTE: デフォルトでは「評価未入力」のみ表示（軽量）。
+    # 「評価入力済」も含めたい場合は下記を有効化（全件読み込みで数分かかる）
+    # await _enable_evaluated_filter(page)
+
     # 「さらに表示」を繰り返しクリックして全応募者を読み込む
     load_round = 1
     while True:
@@ -220,6 +224,72 @@ async def download_attachment(page: Page, filename: str, save_dir: str) -> str |
         logger.error(f"  ダウンロード失敗: {filename} - {e}")
         return None
 
+
+
+async def _enable_evaluated_filter(page: Page):
+    """フィルタで「評価・コメント入力済」を有効にして全応募者を表示する
+
+    HRMOSの「担当の選考」ページはデフォルトで「評価・コメント入力済」が
+    非表示になっているため、フィルタアイコンをクリックしてチェックを入れる。
+    """
+    try:
+        filter_link = page.locator('a.icon-only:has(hrm-icon[icon="filter"])')
+        if await filter_link.count() == 0:
+            logger.debug("フィルタアイコンが見つからないためスキップ")
+            return
+
+        await filter_link.first.click()
+        await asyncio.sleep(1)
+
+        # 「評価・コメント入力済」のチェックボックスを探す
+        overlay = page.locator('.cdk-overlay-pane')
+        if await overlay.count() == 0:
+            logger.debug("フィルタオーバーレイが表示されなかったためスキップ")
+            return
+
+        # 「評価・コメント入力済」を含むリスト項目のチェックボックスを確認
+        evaluated_li = overlay.locator('li').filter(has_text="評価・コメント入力済")
+        if await evaluated_li.count() == 0:
+            logger.debug("「評価・コメント入力済」項目が見つからないためスキップ")
+            # オーバーレイを閉じる
+            await page.locator('.cdk-overlay-backdrop').click()
+            await asyncio.sleep(0.5)
+            return
+
+        # チェックボックスの状態を確認（labelにcheckedクラスがあればON）
+        checkbox_label = evaluated_li.locator('label').first
+        label_class = await checkbox_label.get_attribute("class") or ""
+
+        if "checked" not in label_class:
+            logger.info("フィルタ: 「評価・コメント入力済」を有効化")
+            await evaluated_li.first.click()
+            await asyncio.sleep(0.5)
+
+            # 「適用」ボタンをクリック
+            apply_btn = overlay.locator('button').filter(has_text="適用")
+            if await apply_btn.count() > 0:
+                await apply_btn.first.click()
+                await page.wait_for_load_state("networkidle")
+                await asyncio.sleep(1)
+                logger.info("フィルタ適用完了")
+            else:
+                logger.warning("「適用」ボタンが見つかりません")
+        else:
+            logger.debug("「評価・コメント入力済」は既に有効")
+            # オーバーレイを閉じる
+            await page.locator('.cdk-overlay-backdrop').click()
+            await asyncio.sleep(0.5)
+
+    except Exception as e:
+        logger.warning(f"フィルタ操作でエラー（処理を続行）: {e}")
+        # エラーでもオーバーレイが開いていたら閉じる
+        try:
+            backdrop = page.locator('.cdk-overlay-backdrop')
+            if await backdrop.count() > 0 and await backdrop.first.is_visible():
+                await backdrop.first.click()
+                await asyncio.sleep(0.5)
+        except Exception:
+            pass
 
 
 def _is_applicant_link(href: str) -> bool:

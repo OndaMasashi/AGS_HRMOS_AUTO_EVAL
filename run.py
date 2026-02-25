@@ -41,6 +41,10 @@ def main():
         "--all", action="store_true", dest="rescan_all",
         help="全応募者を再評価（評価済みも含む）"
     )
+    scan_parser.add_argument(
+        "--retry-errors", action="store_true", dest="retry_errors",
+        help="エラー状態の応募者も再評価対象に含める"
+    )
 
     # report コマンド
     report_parser = subparsers.add_parser("report", help="AI評価結果をExcelに出力")
@@ -62,7 +66,7 @@ def main():
     from src.main import run_scan, run_report, show_status
 
     if args.command == "scan":
-        asyncio.run(run_scan(args.config, args.rescan_all))
+        asyncio.run(run_scan(args.config, args.rescan_all, args.retry_errors))
 
     elif args.command == "report":
         run_report(args.config, args.run_id)

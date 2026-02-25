@@ -22,7 +22,7 @@ from src.reporter.notify import send_report_email
 logger = logging.getLogger(__name__)
 
 
-async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
+async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, retry_errors: bool = False):
     """メインスキャン処理を実行"""
     config = load_config(config_path)
     conn = init_db(config["scan"]["db_path"])
@@ -77,6 +77,8 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
             if rescan_all:
                 repo.reset_all_applicants()
                 targets = repo.get_all_applicants()
+            elif retry_errors:
+                targets = repo.get_retryable_applicants()
             else:
                 targets = repo.get_pending_applicants()
 
@@ -89,6 +91,10 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
                 app_url = applicant["page_url"]
 
                 logger.info(f"[{i}/{len(targets)}] {app_name} を処理中...")
+
+                # 再評価時は旧データを削除
+                if rescan_all:
+                    repo.delete_evaluations_for_applicant(app_id)
 
                 try:
                     # 添付ファイル情報を取得
@@ -129,31 +135,31 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
                     # テキストが抽出できた場合、AI評価を実行
                     combined_text = "\n\n---\n\n".join(all_texts)
 
-                    if combined_text and last_doc_id is not None:
-                        try:
-                            prompt = build_evaluation_prompt(
-                                resume_text=combined_text,
-                                criteria=criteria,
-                                system_instructions=config.get("evaluation", {}).get("system_instructions", ""),
-                                interview_config=interview_config,
-                            )
+                    if not combined_text or last_doc_id is None:
+                        logger.warning(f"  テキスト抽出失敗 ({app_name}): 書類はあるがテキストを取得できず")
+                        repo.mark_applicant_error(app_id)
+                        continue
 
-                            provider = config.get("evaluation", {}).get("provider", "claude")
-                            logger.info(f"  {provider.capitalize()} CLIで評価中...")
-                            raw_response = call_llm(prompt, config)
+                    prompt = build_evaluation_prompt(
+                        resume_text=combined_text,
+                        criteria=criteria,
+                        system_instructions=config.get("evaluation", {}).get("system_instructions", ""),
+                        interview_config=interview_config,
+                    )
 
-                            evaluation_data = parse_evaluation_response(raw_response, criteria_names)
+                    provider = config.get("evaluation", {}).get("provider", "claude")
+                    logger.info(f"  {provider.capitalize()} CLIで評価中...")
+                    raw_response = call_llm(prompt, config)
 
-                            repo.add_evaluations_batch(
-                                app_id, last_doc_id, evaluation_data, run_id, raw_response
-                            )
-                            eval_count += 1
-                            logger.info(
-                                f"  評価完了: 合計 {evaluation_data['total_score']} 点"
-                            )
+                    evaluation_data = parse_evaluation_response(raw_response, criteria_names)
 
-                        except (LLMClientError, ParseError) as e:
-                            logger.error(f"  AI評価エラー ({app_name}): {e}")
+                    repo.add_evaluations_batch(
+                        app_id, last_doc_id, evaluation_data, run_id, raw_response
+                    )
+                    eval_count += 1
+                    logger.info(
+                        f"  評価完了: 合計 {evaluation_data['total_score']} 点"
+                    )
 
                     repo.mark_applicant_scanned(app_id)
                     scanned_count += 1
@@ -161,6 +167,10 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False):
                     # ダウンロードファイル削除（オプション）
                     if delete_after and Path(app_download_dir).exists():
                         shutil.rmtree(app_download_dir)
+
+                except (LLMClientError, ParseError) as e:
+                    logger.error(f"  AI評価エラー ({app_name}): {e}")
+                    repo.mark_applicant_error(app_id)
 
                 except Exception as e:
                     logger.error(f"  応募者 {app_name} の処理でエラー: {e}")
