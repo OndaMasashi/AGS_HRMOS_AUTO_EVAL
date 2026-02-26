@@ -17,6 +17,10 @@ venv/
 .vscode/
 .idea/
 
+# メモ・改善リスト
+note/
+improvement_list/
+
 # OS
 Thumbs.db
 .DS_Store
