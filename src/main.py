@@ -14,12 +14,29 @@ from src.database.models import init_db
 from src.database.repository import Repository
 from src.parser.document import extract_text
 from src.evaluator.llm_client import call_llm, LLMClientError
+from src.evaluator.pii_masker import PiiMasker
 from src.evaluator.prompt_builder import build_evaluation_prompt
 from src.evaluator.response_parser import parse_evaluation_response, ParseError
 from src.reporter.export import export_evaluation_excel
 from src.reporter.notify import send_report_email
 
 logger = logging.getLogger(__name__)
+
+
+def _unmask_evaluation_data(data: dict, masker: PiiMasker) -> None:
+    """評価結果内のプレースホルダーを元のPIIに復元する"""
+    for eval_item in data.get("evaluations", []):
+        if "comment" in eval_item:
+            eval_item["comment"] = masker.unmask(eval_item["comment"])
+
+    if "overall_comment" in data:
+        data["overall_comment"] = masker.unmask(data["overall_comment"])
+
+    if "interview_questions" in data and isinstance(data["interview_questions"], list):
+        data["interview_questions"] = [
+            masker.unmask(q) if isinstance(q, str) else q
+            for q in data["interview_questions"]
+        ]
 
 
 async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, retry_errors: bool = False):
@@ -140,8 +157,19 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, r
                         repo.mark_applicant_error(app_id)
                         continue
 
+                    # PIIマスキング: LLM送信前に個人情報をプレースホルダーに置換
+                    try:
+                        masker = PiiMasker(applicant_name=app_name)
+                        masked_text = masker.mask(combined_text)
+                        if masker.masked_count > 0:
+                            logger.info(f"  PIIマスキング完了: {masker.mapping_summary}")
+                    except Exception as e:
+                        logger.warning(f"  PIIマスキングでエラー（マスクなしで続行）: {e}")
+                        masker = PiiMasker(applicant_name="")
+                        masked_text = combined_text
+
                     prompt = build_evaluation_prompt(
-                        resume_text=combined_text,
+                        resume_text=masked_text,
                         criteria=criteria,
                         system_instructions=config.get("evaluation", {}).get("system_instructions", ""),
                         interview_config=interview_config,
@@ -152,6 +180,9 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, r
                     raw_response = call_llm(prompt, config)
 
                     evaluation_data = parse_evaluation_response(raw_response, criteria_names)
+
+                    # PIIアンマスキング: LLM応答内のプレースホルダーを復元
+                    _unmask_evaluation_data(evaluation_data, masker)
 
                     repo.add_evaluations_batch(
                         app_id, last_doc_id, evaluation_data, run_id, raw_response
