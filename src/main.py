@@ -38,6 +38,9 @@ def _unmask_evaluation_data(data: dict, masker: PiiMasker) -> None:
             for q in data["interview_questions"]
         ]
 
+    if "remarks" in data:
+        data["remarks"] = masker.unmask(data["remarks"])
+
 
 async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, retry_errors: bool = False):
     """メインスキャン処理を実行"""
@@ -224,8 +227,10 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, r
             evaluations = repo.get_evaluations_for_run(run_id)
             report_dir = config["scan"]["report_dir"]
             question_count = interview_config.get("count", 3)
+            first_pass_criteria = config.get("first_pass_criteria", [])
             xlsx_path = export_evaluation_excel(
-                evaluations, criteria_names, report_dir, question_count
+                evaluations, criteria_names, report_dir, question_count,
+                first_pass_criteria=first_pass_criteria,
             )
             logger.info(f"レポート出力: {xlsx_path}")
 
@@ -268,8 +273,10 @@ def run_report(config_path: str = "config.yaml", run_id: str | None = None):
         return
 
     report_dir = config["scan"]["report_dir"]
+    first_pass_criteria = config.get("first_pass_criteria", [])
     xlsx_path = export_evaluation_excel(
-        evaluations, criteria_names, report_dir, question_count
+        evaluations, criteria_names, report_dir, question_count,
+        first_pass_criteria=first_pass_criteria,
     )
 
     print(f"\nレポート出力完了:")

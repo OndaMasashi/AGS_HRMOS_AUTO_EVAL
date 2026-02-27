@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     interview_questions TEXT,
     applicant_gender TEXT,
     applicant_age INTEGER,
+    remarks TEXT,
     scan_run_id TEXT,
     raw_response TEXT,
     evaluated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -70,6 +71,8 @@ def _migrate_evaluations(conn: sqlite3.Connection):
         conn.execute("ALTER TABLE evaluations ADD COLUMN applicant_gender TEXT")
     if "applicant_age" not in columns:
         conn.execute("ALTER TABLE evaluations ADD COLUMN applicant_age INTEGER")
+    if "remarks" not in columns:
+        conn.execute("ALTER TABLE evaluations ADD COLUMN remarks TEXT")
     conn.commit()
 
 

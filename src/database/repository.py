@@ -212,18 +212,19 @@ class Repository:
         )
         applicant_gender = evaluation_data.get("applicant_gender", "不明")
         applicant_age = evaluation_data.get("applicant_age")
+        remarks = evaluation_data.get("remarks", "")
 
         for eval_item in evaluation_data.get("evaluations", []):
             self.conn.execute(
                 "INSERT INTO evaluations "
                 "(applicant_id, document_id, criteria_name, score, comment, "
                 " total_score, overall_comment, interview_questions, "
-                " applicant_gender, applicant_age, scan_run_id, raw_response) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " applicant_gender, applicant_age, remarks, scan_run_id, raw_response) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (applicant_id, document_id,
                  eval_item["criteria_name"], eval_item["score"], eval_item["comment"],
                  total_score, overall_comment, interview_questions,
-                 applicant_gender, applicant_age,
+                 applicant_gender, applicant_age, remarks,
                  scan_run_id, raw_response),
             )
         self.conn.commit()

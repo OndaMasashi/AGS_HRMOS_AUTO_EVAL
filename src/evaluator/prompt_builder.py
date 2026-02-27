@@ -25,6 +25,22 @@ def total_to_rank(total_score: int, criteria_count: int) -> str:
         return "D"
 
 
+def is_first_pass_candidate(avg_score: float, age: int | None, first_pass_criteria: list[dict]) -> str:
+    """年齢帯ごとの閾値に基づいて1次通過候補を判定する。○/△/空文字を返す"""
+    if age is None or not first_pass_criteria:
+        return ""
+    for criteria in first_pass_criteria:
+        age_range = criteria.get("age_range", [0, 100])
+        if age_range[0] <= age <= age_range[1]:
+            min_score = criteria.get("min_avg_score", 3.0)
+            if avg_score >= min_score:
+                return "○"
+            elif avg_score >= min_score - 0.3:
+                return "△"
+            return ""
+    return ""
+
+
 def build_evaluation_prompt(
     resume_text: str,
     criteria: list[dict],
@@ -61,7 +77,8 @@ def build_evaluation_prompt(
         "overall_comment": "（総合評価コメント）",
         "interview_questions": [
             f"（面接質問{i+1}）" for i in range(question_count)
-        ]
+        ],
+        "remarks": "（評価基準では測れない特記事項。転職回数が多い、ブランク期間がある、特殊な経歴など。該当なしの場合は空文字）"
     }
     schema_str = json.dumps(output_schema, ensure_ascii=False, indent=2)
 
@@ -112,6 +129,7 @@ def build_evaluation_prompt(
 - commentは日本語で、スコアの根拠となる具体的事実を含めて記載してください
 - overall_commentは強み・弱みの要約と採用推奨度を含めてください
 - interview_questionsは応募者の書類内容に基づいた具体的な質問にしてください
+- remarksは評価基準に含まれない注目すべき事項を記載してください（転職頻度、ブランク期間、特殊な経歴、特記すべきスキルなど）。該当なしの場合は空文字にしてください
 - 出力はJSONのみ。マークダウンのコードブロック（```）で囲まないでください
 
 ## 応募者の書類内容

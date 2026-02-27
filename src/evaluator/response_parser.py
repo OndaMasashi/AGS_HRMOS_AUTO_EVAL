@@ -111,3 +111,9 @@ def _validate_structure(data: dict, criteria_names: list[str]):
             data["applicant_age"] = int(data["applicant_age"])
         except (ValueError, TypeError):
             data["applicant_age"] = None
+
+    # remarksが無い場合はデフォルト
+    if "remarks" not in data:
+        data["remarks"] = ""
+    elif not isinstance(data["remarks"], str):
+        data["remarks"] = str(data["remarks"])
