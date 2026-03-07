@@ -7,7 +7,7 @@ REM ============================================================
 
 set TASK_NAME_LUNCH=HRMOS_AutoEval_1230
 set TASK_NAME_EVENING=HRMOS_AutoEval_1730
-set BAT_PATH=C:\work\AGS_HRMOS_AUTO_EVAL\run_scan.bat
+set BAT_PATH=%~dp0run_scan.bat
 
 echo.
 echo === HRMOS AI自動評価 タスクスケジューラ登録 ===

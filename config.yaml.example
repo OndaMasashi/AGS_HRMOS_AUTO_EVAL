@@ -26,7 +26,7 @@ evaluation_criteria:
 
 # AI評価設定
 evaluation:
-  provider: "claude"             # "claude" or "gemini"（デフォルト: claude）
+  provider: "gemini"              # "claude" or "gemini"（デフォルト: gemini）
   system_instructions: |
     書類の内容に基づいて客観的に評価してください。
     推測ではなく、書類に明記されている情報のみを根拠にしてください。

@@ -21,49 +21,63 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 
 ## セットアップ手順
 
-### 1. ソースコードの取得
+### かんたんセットアップ（推奨）
+
+配布された zip を任意の場所に展開し、`setup.bat` をダブルクリックするだけです。
+
+1. zip を任意のフォルダに展開
+2. `setup.bat` をダブルクリック（Python確認・仮想環境・依存パッケージ・Chromium を自動セットアップ）
+3. `config.yaml` をテキストエディタで開き、HRMOSのログイン情報を入力
+4. `run_scan.bat` をダブルクリックで実行
+
+> **前提条件**:
+> - Python 3.10 以上がインストール済みであること（未インストールの場合、setup.bat が案内を表示します）
+> - Gemini CLI がインストール済みであること（`npm install -g @google/gemini-cli`）
+
+### 手動セットアップ
+
+setup.bat を使わずに手動でセットアップする場合は、以下の手順に従ってください。
+
+#### 1. ソースコードの取得
 
 配布された zip を任意の場所に展開します。
 
-```powershell
-cd C:\work\AGS_HRMOS_AUTO_EVAL   # 展開したパスに合わせて変更
-```
-
-### 2. Python仮想環境の作成・有効化
+#### 2. Python仮想環境の作成・有効化
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
-### 3. 依存パッケージのインストール
+#### 3. 依存パッケージのインストール
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Playwrightブラウザのインストール
+#### 4. Playwrightブラウザのインストール
 
 ```bash
 playwright install chromium
 ```
 
-### 5. LLM CLIの確認
+#### 5. Gemini CLIの確認
 
-デフォルトではClaude CLIを使用します。ターミナルから `claude` コマンドが実行できることを確認してください。
-
-```bash
-claude --version
-```
-
-Gemini CLIを使用する場合は、別途インストールが必要です。
+デフォルトではGemini CLIを使用します。ターミナルから `gemini` コマンドが実行できることを確認してください。
 
 ```bash
-npm install -g @google/gemini-cli
 gemini --version
 ```
 
-### 6. 設定ファイルの作成
+未インストールの場合:
+
+```bash
+npm install -g @google/gemini-cli
+```
+
+Claude CLIを使用する場合は、`config.yaml` の `evaluation.provider` を `"claude"` に変更してください。
+
+#### 6. 設定ファイルの作成
 
 `config.yaml.example` をコピーして `config.yaml` を作成し、各項目を編集します。
 
@@ -74,10 +88,6 @@ copy config.yaml.example config.yaml
 `config.yaml` を開いて以下を設定してください。
 
 ```yaml
-hrmos:
-  base_url: "https://hrmos.co/interviews"
-  login_url: "https://hrmos.co/login"
-
 # HRMOS採用のログイン情報
 credentials:
   email: "your-email@example.com"
@@ -87,59 +97,7 @@ credentials:
 evaluation_criteria:
   - name: "技術スキル"
     description: "プログラミング言語（Python, JavaScript等）、AI/ML、クラウド（AWS, GCP等）の技術経験と深さ"
-  - name: "マネジメント経験"
-    description: "チームリーダー、プロジェクトマネジメント、部下育成の経験"
-  - name: "コミュニケーション能力"
-    description: "文書の論理構成、表現力、対人スキルの記述"
-  - name: "業界経験"
-    description: "IT業界、コンサルティング、スタートアップ等の業界での経験年数と役割"
-  - name: "学歴・資格"
-    description: "学歴、IT関連資格（AWS認定、PMP等）、語学力"
-
-# AI評価設定
-evaluation:
-  provider: "claude"       # "claude" or "gemini"（デフォルト: claude）
-  system_instructions: |
-    書類の内容に基づいて客観的に評価してください。
-    推測ではなく、書類に明記されている情報のみを根拠にしてください。
-  max_retries: 3           # LLM CLI呼び出しのリトライ回数
-  retry_delay: 5           # リトライ間隔（秒）
-  timeout: 300             # タイムアウト（秒）
-  max_text_chars: 80000    # テキストの最大文字数（超過分は切り詰め）
-  shell: false             # true: CLIが.cmd/.batの場合に必要
-
-# 面接質問生成設定
-interview_questions:
-  count: 3                 # 生成する質問数
-  perspective: |
-    応募者の経歴や技術スキルの深掘り、チームワークやコミュニケーション能力の確認、
-    志望動機やキャリアビジョンの把握を重視してください。
-
-# 1次通過候補の判定基準（年齢帯ごとに平均点の閾値を設定）
-first_pass_criteria:
-  - age_range: [20, 35]
-    min_avg_score: 3.0    # 平均3.0以上で○、2.7以上で△
-  - age_range: [36, 45]
-    min_avg_score: 3.5
-  - age_range: [46, 100]
-    min_avg_score: 4.0
-
-scan:
-  download_dir: "./data/downloads"   # ダウンロード先
-  report_dir: "./data/reports"       # レポート出力先
-  db_path: "./data/hrmos.db"         # SQLiteデータベース
-  wait_between_pages: 2              # ページ間の待機秒数
-  headless: false                    # true: ブラウザ非表示 / false: ブラウザ表示
-  delete_downloads_after: false      # true: 解析後にダウンロードファイルを削除
-
-# メール通知設定（Resend）- オプション
-email:
-  enabled: false                         # true: 評価後にメール送信 / false: 無効
-  api_key: "re_xxxxx"                    # Resend APIキー
-  from: "onboarding@resend.dev"          # 送信元
-  to:
-    - "your-email@example.com"           # 送信先（複数指定可）
-  subject_prefix: "[HRMOS]"
+  # ... 必要に応じて追加・変更
 ```
 
 > **補足**: 認証情報・APIキーは環境変数でも指定できます。

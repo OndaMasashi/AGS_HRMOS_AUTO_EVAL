@@ -21,6 +21,9 @@ venv/
 note/
 improvement_list/
 
+# Node
+node_modules/
+
 # OS
 Thumbs.db
 .DS_Store

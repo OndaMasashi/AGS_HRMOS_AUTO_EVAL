@@ -1,3 +1,9 @@
 @echo off
-cd /d "C:\work\AGS_HRMOS_AUTO_EVAL"
-"C:\Users\Masashi.Onda\AppData\Local\Programs\Python\Python313\python.exe" run.py scan
+cd /d "%~dp0"
+if not exist .venv\Scripts\python.exe (
+    echo [エラー] .venv が見つかりません。先に setup.bat を実行してください。
+    pause
+    exit /b 1
+)
+.venv\Scripts\python.exe run.py scan
+if %ERRORLEVEL% NEQ 0 pause
