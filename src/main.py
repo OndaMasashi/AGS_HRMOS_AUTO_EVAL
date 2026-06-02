@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import shutil
+from collections import OrderedDict
 from pathlib import Path
 
 from playwright.async_api import async_playwright
@@ -15,12 +16,78 @@ from src.database.repository import Repository
 from src.parser.document import extract_text
 from src.evaluator.llm_client import call_llm, LLMClientError
 from src.evaluator.pii_masker import PiiMasker
-from src.evaluator.prompt_builder import build_evaluation_prompt
+from src.evaluator.prompt_builder import build_evaluation_prompt, is_first_pass_candidate
 from src.evaluator.response_parser import parse_evaluation_response, ParseError
 from src.reporter.export import export_evaluation_excel
 from src.reporter.notify import send_report_email
 
 logger = logging.getLogger(__name__)
+
+# プロジェクトルート（src/main.py から2階層上）。
+# documents.file_path が "./data/downloads/..." 相対パスの場合の絶対化基準に使う
+# （実行時CWDに依存させないため）。
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_download_path(file_path: str) -> Path:
+    """書類のローカルパスを絶対化する（相対パスはプロジェクトルート基準で解決）"""
+    p = Path(file_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return p.resolve()
+
+
+def _collect_first_pass_attachments(
+    repo: Repository,
+    evaluations: list[dict],
+    criteria_names: list[str],
+    first_pass_criteria: list[dict],
+) -> list[dict]:
+    """1次通過候補(○)の応募者の経歴書ファイルを収集する
+
+    評価結果を応募者ごとにグルーピングし、平均点と年齢から○候補を判定。
+    ○候補のみ、その応募者の全書類のローカルパスを返す。
+    （evaluations のJOINは最後の1書類しか指さないため、documentsを別途引く）
+    再評価で蓄積した重複書類は同一パスを除外する。
+
+    Returns:
+        list[{"applicant_name": str, "file_path": str}]（絶対パス・重複排除済み）
+    """
+    criteria_count = len(criteria_names)
+    if criteria_count == 0:
+        return []
+
+    # 応募者ごとに代表情報を集約（値が None でも安全な既定値に正規化）
+    by_applicant = OrderedDict()
+    for ev in evaluations:
+        app_id = ev["applicant_id"]
+        if app_id not in by_applicant:
+            by_applicant[app_id] = {
+                "name": ev.get("applicant_name") or "不明",
+                "age": ev.get("applicant_age"),
+                "total_score": ev.get("total_score") or 0,
+            }
+
+    attachment_sources = []
+    seen_paths = set()
+    for app_id, app_data in by_applicant.items():
+        avg_score = round(app_data["total_score"] / criteria_count, 1)
+        if is_first_pass_candidate(avg_score, app_data["age"], first_pass_criteria) != "○":
+            continue
+        for doc in repo.get_documents_for_applicant(app_id):
+            file_path = doc.get("file_path")
+            if not file_path:
+                continue
+            resolved = str(_resolve_download_path(file_path))
+            if resolved in seen_paths:
+                continue  # 再評価で蓄積した重複書類を除外
+            seen_paths.add(resolved)
+            attachment_sources.append({
+                "applicant_name": app_data["name"],
+                "file_path": resolved,
+            })
+
+    return attachment_sources
 
 
 def _unmask_evaluation_data(data: dict, masker: PiiMasker) -> None:
@@ -234,11 +301,17 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, r
             )
             logger.info(f"レポート出力: {xlsx_path}")
 
-            # メール通知
+            # メール通知（1次通過候補の経歴書を添付）
             try:
+                attachment_sources = None
+                if config.get("email", {}).get("attach_resumes", True):
+                    attachment_sources = _collect_first_pass_attachments(
+                        repo, evaluations, criteria_names, first_pass_criteria
+                    )
                 send_report_email(
                     evaluations, criteria_names, xlsx_path, config,
                     total_applicants, scanned_count,
+                    attachment_sources=attachment_sources,
                 )
             except Exception as e:
                 logger.error(f"メール通知でエラー: {e}")

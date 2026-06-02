@@ -59,3 +59,4 @@ email:
   to:
     - ""
   subject_prefix: "[HRMOS]"
+  attach_resumes: true           # true: 1次通過候補(○)の経歴書をメール添付。経歴書はマスクなしの個人情報を含むため社内ポリシー確認のうえ運用すること
