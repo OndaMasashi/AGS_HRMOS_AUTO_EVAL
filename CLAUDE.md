@@ -47,7 +47,7 @@ CLI (run.py: argparse)
        ├→ parser/    : PDF(pdfplumber) / DOCX(python-docx) / XLSX(openpyxl) → テキスト
        ├→ evaluator/ : PII マスキング → プロンプト構築 → LLM CLI subprocess → JSON パース
        ├→ database/  : SQLite (Repository パターン)
-       └→ reporter/  : Excel 出力（レーダーチャート・ランク色付き）+ Resend メール通知（評価内訳・○のHRMOSリンク・1次通過候補の経歴書添付）
+       └→ reporter/  : Excel 出力（レーダーチャート・ランク色付き）+ Resend メール通知（評価結果サマリ・新規0件通知・失敗アラート）
 ```
 
 ### LLM呼び出しの仕組み
@@ -76,6 +76,7 @@ APIキー不要。`subprocess.run()` で Claude CLI (`claude -p`) または Gemi
 - `first_pass_criteria`: 年齢帯×平均点閾値による1次通過判定
 - `interview_questions.perspective`: 面接質問生成の観点
 - `email.attach_resumes`: `true`（デフォルト）で1次通過候補(○)の経歴書をメール添付。経歴書はマスクなしPIIを含むため運用注意
+- `email.notify_on_no_candidates`: `true`（デフォルト）で新規応募者0件の正常終了時も「新規なし」通知を送る（無音による誤認防止）。失敗アラート（認証失敗・一覧0件・評価成功0件・例外）は `email.enabled` のみで常時送信
 
 ## Conventions
 

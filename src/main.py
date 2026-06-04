@@ -19,7 +19,11 @@ from src.evaluator.pii_masker import PiiMasker
 from src.evaluator.prompt_builder import build_evaluation_prompt, is_first_pass_candidate
 from src.evaluator.response_parser import parse_evaluation_response, ParseError
 from src.reporter.export import export_evaluation_excel
-from src.reporter.notify import send_report_email
+from src.reporter.notify import (
+    send_report_email,
+    send_no_candidates_email,
+    send_failure_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +39,14 @@ def _resolve_download_path(file_path: str) -> Path:
     if not p.is_absolute():
         p = PROJECT_ROOT / p
     return p.resolve()
+
+
+def _notify_failure(config: dict, reason: str, total_applicants: int = 0) -> None:
+    """スキャン失敗アラートを送信する（通知自体の失敗は本処理を止めないよう握り潰す）"""
+    try:
+        send_failure_email(config, reason, total_applicants)
+    except Exception as e:
+        logger.error(f"失敗通知メールでエラー: {e}")
 
 
 def _collect_first_pass_attachments(
@@ -149,6 +161,7 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, r
             if not authenticated:
                 logger.error("認証に失敗しました。処理を中断します。")
                 repo.fail_scan_run(run_id)
+                _notify_failure(config, "HRMOSのログイン／セッション認証に失敗しました")
                 return
 
             # 応募者一覧を収集
@@ -282,6 +295,18 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, r
 
             await browser.close()
 
+        # 応募者一覧を1件も取得できなかった場合は実質失敗として扱う
+        # （ログイン済みでも、セレクタ崩れ・HRMOS表示異常で 0 件になり得る）。
+        if total_applicants == 0:
+            logger.error("応募者一覧を1件も取得できませんでした。")
+            repo.fail_scan_run(run_id)
+            _notify_failure(
+                config,
+                "応募者一覧を1件も取得できませんでした（ログイン状態・HRMOS表示・セレクタを要確認）",
+                total_applicants,
+            )
+            return
+
         # スキャン完了
         repo.complete_scan_run(run_id, total_applicants, scanned_count, eval_count)
         logger.info(
@@ -315,10 +340,30 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, r
                 )
             except Exception as e:
                 logger.error(f"メール通知でエラー: {e}")
+        elif not targets:
+            # 評価対象が真に0件（新規応募者なし）で正常終了 → 「新規なし」を通知
+            # （無音による「失敗したのでは」という誤認を防ぐ）
+            try:
+                send_no_candidates_email(config, total_applicants, scanned_count)
+            except Exception as e:
+                logger.error(f"新規0件通知メールでエラー: {e}")
+        else:
+            # 評価対象はいたが1件も評価成功しなかった（全員エラー or 添付書類なし）。
+            # 「新規なし」と誤報すると障害が隠れるため、失敗アラートに振り分ける。
+            logger.error(
+                f"評価対象 {len(targets)} 名を処理しましたが、AI評価成功は0件でした。"
+            )
+            _notify_failure(
+                config,
+                f"評価対象 {len(targets)} 名を処理しましたが、AI評価に成功した応募者が0名でした"
+                f"（全員エラー、または添付書類なし）。LLM CLI・添付取得・書類解析を要確認",
+                total_applicants,
+            )
 
     except Exception as e:
         logger.error(f"評価処理で致命的エラー: {e}")
         repo.fail_scan_run(run_id)
+        _notify_failure(config, f"処理中に例外が発生しました: {e}")
         raise
     finally:
         conn.close()

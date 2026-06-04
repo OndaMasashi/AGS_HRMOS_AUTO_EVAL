@@ -43,6 +43,80 @@ def _build_attachment_name(applicant_name: str, original_name: str, used_names: 
     return f"{stem}_{i}{suffix}"
 
 
+def _subject_prefix(config: dict) -> str:
+    """件名の接頭辞を取得する（既定 "[HRMOS]"）"""
+    return config.get("email", {}).get("subject_prefix", "[HRMOS]")
+
+
+def _resolve_email_settings(config: dict) -> dict | None:
+    """メール送信に必要な設定を検証して返す（不備があれば None）
+
+    enabled 判定・resend 有無・APIキー・送信先を一括チェックし、
+    送信系の各関数で共通利用する。
+    """
+    email_config = config.get("email", {})
+
+    if not email_config.get("enabled", False):
+        logger.info("メール通知は無効です（email.enabled: false）")
+        return None
+
+    if resend is None:
+        logger.warning("resendパッケージが未インストールです。pip install resend で追加してください。")
+        return None
+
+    api_key = os.environ.get("RESEND_API_KEY") or email_config.get("api_key", "")
+    if not api_key:
+        logger.warning("Resend APIキーが設定されていません。メール送信をスキップします。")
+        return None
+
+    to_list = email_config.get("to", [])
+    if not to_list or not to_list[0]:
+        logger.warning("メール送信先が設定されていません。メール送信をスキップします。")
+        return None
+
+    return {
+        "api_key": api_key,
+        "from": email_config.get("from", "onboarding@resend.dev"),
+        "to": to_list,
+        "prefix": _subject_prefix(config),
+    }
+
+
+def _send_email(
+    config: dict,
+    subject: str,
+    html_body: str,
+    attachments: list[dict] | None = None,
+) -> bool:
+    """Resend でメールを1通送信する（設定検証は呼び出し側 or 本関数内で実施）
+
+    Returns:
+        True: 送信成功, False: 送信失敗またはスキップ（設定不備含む）
+    """
+    settings = _resolve_email_settings(config)
+    if settings is None:
+        return False
+
+    resend.api_key = settings["api_key"]
+
+    try:
+        params = {
+            "from": settings["from"],
+            "to": settings["to"],
+            "subject": subject,
+            "html": html_body,
+        }
+        if attachments:
+            params["attachments"] = attachments
+
+        result = resend.Emails.send(params)
+        logger.info(f"メール送信成功: {result.get('id', 'unknown')} → {settings['to']}")
+        return True
+    except Exception as e:
+        logger.error(f"メール送信に失敗しました: {e}")
+        return False
+
+
 def send_report_email(
     evaluations: list[dict],
     criteria_names: list[str],
@@ -62,30 +136,10 @@ def send_report_email(
     Returns:
         True: 送信成功, False: 送信失敗またはスキップ
     """
-    email_config = config.get("email", {})
-
-    if not email_config.get("enabled", False):
-        logger.info("メール通知は無効です（email.enabled: false）")
+    settings = _resolve_email_settings(config)
+    if settings is None:
         return False
-
-    if resend is None:
-        logger.warning("resendパッケージが未インストールです。pip install resend で追加してください。")
-        return False
-
-    api_key = os.environ.get("RESEND_API_KEY") or email_config.get("api_key", "")
-    if not api_key:
-        logger.warning("Resend APIキーが設定されていません。メール送信をスキップします。")
-        return False
-
-    resend.api_key = api_key
-
-    from_addr = email_config.get("from", "onboarding@resend.dev")
-    to_list = email_config.get("to", [])
-    prefix = email_config.get("subject_prefix", "[HRMOS]")
-
-    if not to_list or not to_list[0]:
-        logger.warning("メール送信先が設定されていません。メール送信をスキップします。")
-        return False
+    prefix = settings["prefix"]
 
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -133,22 +187,68 @@ def send_report_email(
             used_names.add(attach_name)
             total_attachment_bytes += len(content)
 
-    try:
-        params = {
-            "from": from_addr,
-            "to": to_list,
-            "subject": subject,
-            "html": html_body,
-        }
-        if attachments:
-            params["attachments"] = attachments
+    return _send_email(config, subject, html_body, attachments)
 
-        result = resend.Emails.send(params)
-        logger.info(f"メール送信成功: {result.get('id', 'unknown')} → {to_list}")
-        return True
-    except Exception as e:
-        logger.error(f"メール送信に失敗しました: {e}")
+
+def send_no_candidates_email(
+    config: dict, total_applicants: int, scanned_count: int
+) -> bool:
+    """新規応募者が0件（評価対象なし）で正常終了したことを通知する
+
+    「正常だが何もしなかった」状態を可視化し、無音による「失敗したのでは」という
+    誤認を防ぐ。送信可否は config.email.notify_on_no_candidates（既定 true）で制御。
+
+    Returns:
+        True: 送信成功, False: 送信失敗・スキップ・通知無効
+    """
+    if not config.get("email", {}).get("notify_on_no_candidates", True):
+        logger.info("新規0件通知は無効です（email.notify_on_no_candidates: false）")
         return False
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    subject = f"{_subject_prefix(config)} 本日新規応募者なし ({today})"
+    html_body = f"""\
+<div style="font-family: sans-serif; color: #333;">
+  <h2 style="color: #2F5496;">{today} HRMOS AI評価結果</h2>
+  <p>本日のスキャンは正常に完了しましたが、<strong>新規の評価対象応募者はありませんでした</strong>。</p>
+  <table style="border-collapse: collapse; margin: 16px 0;">
+    <tr><td style="padding: 4px 12px;">スキャン対象（評価未入力）</td><td><strong>{total_applicants}名</strong></td></tr>
+    <tr><td style="padding: 4px 12px;">新規評価</td><td><strong>0名</strong></td></tr>
+  </table>
+  <p style="color: #666; font-size: 13px;">一覧の応募者は全員すでに評価済みです。新規応募が入り次第、評価結果をお送りします。</p>
+</div>
+"""
+    return _send_email(config, subject, html_body)
+
+
+def send_failure_email(
+    config: dict, reason: str, total_applicants: int = 0
+) -> bool:
+    """スキャンが失敗したことをアラートする
+
+    認証失敗・応募者一覧の取得失敗（0件）・処理中の例外など、運用上の異常を
+    可視化する。失敗アラートは常時送信（email.enabled のみで制御）。
+
+    Returns:
+        True: 送信成功, False: 送信失敗・スキップ
+    """
+    now_dt = datetime.now()
+    today = now_dt.strftime("%Y-%m-%d")
+    now = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    subject = f"{_subject_prefix(config)} ⚠ スキャン失敗 ({today})"
+    html_body = f"""\
+<div style="font-family: sans-serif; color: #333;">
+  <h2 style="color: #C0392B;">⚠ HRMOS スキャン失敗</h2>
+  <p>本日のスキャン処理が正常に完了しませんでした。ログをご確認ください。</p>
+  <table style="border-collapse: collapse; margin: 16px 0;">
+    <tr><td style="padding: 4px 12px;">発生時刻</td><td><strong>{now}</strong></td></tr>
+    <tr><td style="padding: 4px 12px;">スキャン対象</td><td><strong>{total_applicants}名</strong></td></tr>
+    <tr><td style="padding: 4px 12px;">理由</td><td><strong>{html.escape(reason)}</strong></td></tr>
+  </table>
+  <p style="color: #666; font-size: 13px;">data/logs 配下の当日ログ（scan_YYYYMMDD_HHMM.log）に詳細が記録されています。</p>
+</div>
+"""
+    return _send_email(config, subject, html_body)
 
 
 def _build_html(

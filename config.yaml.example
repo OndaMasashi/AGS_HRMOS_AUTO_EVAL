@@ -60,3 +60,4 @@ email:
     - ""
   subject_prefix: "[HRMOS]"
   attach_resumes: true           # true: 1次通過候補(○)の経歴書をメール添付。経歴書はマスクなしの個人情報を含むため社内ポリシー確認のうえ運用すること
+  notify_on_no_candidates: true  # true: 新規応募者0件で正常終了した時も「新規なし」通知を送る（無音による誤認防止）。失敗アラートは常時送信
