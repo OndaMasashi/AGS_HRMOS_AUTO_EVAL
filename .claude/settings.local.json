@@ -6,7 +6,11 @@
       "WebFetch(domain:hrmos.co)",
       "WebFetch(domain:playwright.dev)",
       "Bash(pip show:*)",
-      "Bash(git -C \"c:\\\\work\\\\AGS_HRMOS_RETRIEVE\" remote -v)"
+      "Bash(git -C \"c:\\\\work\\\\AGS_HRMOS_RETRIEVE\" remote -v)",
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__chrome-devtools__evaluate_script"
     ]
   }
 }
