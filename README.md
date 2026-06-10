@@ -231,6 +231,7 @@ schtasks /delete /tn "HRMOS_Eval_Noon" /f
 | レポート（Excel） | `data/reports/ai_evaluation_*.xlsx`   | AI評価結果（マトリクス形式、スタイル付き） |
 | データベース      | `data/hrmos.db`                       | 評価履歴・応募者情報（SQLite）         |
 | ダウンロード書類  | `data/downloads/<応募者ID>/`          | PDF/Word/Excel原本                     |
+| 診断アーティファクト | `data/debug/applicant_list_empty_*.png/.html` | 応募者0件など異常時の画面・HTML（原因切り分け用） |
 
 ## プロジェクト構成
 
@@ -263,6 +264,8 @@ AGS_HRMOS_AUTO_EVAL/
 └── data/                   # 実行時に自動生成
     ├── downloads/
     ├── reports/
+    ├── logs/               # 実行ログ（run_scan.bat 経由）
+    ├── debug/              # 異常時の診断用スクショ・HTML
     └── hrmos.db
 ```
 
@@ -321,6 +324,13 @@ playwright install chromium --with-deps
 del storage_state.json
 python run.py scan
 ```
+
+### 「応募者一覧の取得0件」の失敗アラートが届く
+
+セッション失効途中（ログイン画面には飛ばないが一覧が空になる状態）が主な原因です。本ツールは一覧の描画有無まで確認して自動的に再ログインを試みるため、多くは次回実行で復旧します。再発・継続する場合は次を確認してください。
+
+- `data/debug/applicant_list_empty_*.png/.html` に失敗時点の画面が保存されます。ログイン画面が写っていればセッション要因、一覧の構造が変わっていればHRMOSのUI変更（`src/browser/selectors.py` の見直しが必要）です。
+- 手動で復旧する場合は `storage_state.json` を削除して再実行します。
 
 ## 改修履歴（improvement_list/）
 

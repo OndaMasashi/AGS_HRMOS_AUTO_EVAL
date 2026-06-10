@@ -3,6 +3,8 @@
 import asyncio
 import logging
 import re
+from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlparse, urljoin
 
 from playwright.async_api import Page
@@ -88,7 +90,41 @@ async def collect_applicant_links(page: Page, config: dict) -> list[dict]:
             unique_applicants.append(app)
 
     logger.info(f"合計 {len(unique_applicants)} 名の応募者を発見")
+
+    # 0 件は異常（セッション失効途中・UI/セレクタ変更・一時的な描画失敗）。
+    # 再ログイン後もなお 0 件なら原因はセッション以外なので、切り分け用に
+    # 失敗時点の画面を残す。
+    if not unique_applicants:
+        await _dump_debug_artifacts(page, config, "applicant_list_empty")
+
     return unique_applicants
+
+
+async def _dump_debug_artifacts(page: Page, config: dict, label: str) -> None:
+    """異常時にスクリーンショットとHTMLを data/debug/ へ保存する。
+
+    応募者0件などの失敗が「セッション失効・UI/セレクタ変更・一時的な描画
+    失敗」のいずれかを後から切り分けられるよう、失敗時点の画面状態を残す。
+    保存自体の失敗は本処理を止めない。
+    """
+    try:
+        download_dir = config["scan"].get("download_dir", "./data/downloads")
+        debug_dir = Path(download_dir).parent / "debug"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        png_path = debug_dir / f"{label}_{ts}.png"
+        html_path = debug_dir / f"{label}_{ts}.html"
+
+        await page.screenshot(path=str(png_path), full_page=True)
+        html_path.write_text(await page.content(), encoding="utf-8")
+
+        logger.warning(
+            f"応募者0件のため診断用に画面を保存: {png_path} / {html_path} "
+            f"(現在URL: {page.url})"
+        )
+    except Exception as e:
+        logger.warning(f"診断用アーティファクトの保存に失敗（処理は継続）: {e}")
 
 
 async def get_attachment_links(page: Page, applicant_url: str) -> list[dict]:
@@ -173,8 +209,6 @@ async def get_attachment_links(page: Page, applicant_url: str) -> list[dict]:
 
 async def download_attachment(page: Page, filename: str, save_dir: str) -> str | None:
     """添付ファイルをダウンロードする（ファイル名テキスト付近のDLアイコンをクリック）"""
-    from pathlib import Path
-
     save_path = Path(save_dir) / filename
 
     # 既にダウンロード済みならスキップ

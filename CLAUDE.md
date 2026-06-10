@@ -81,7 +81,7 @@ APIキー不要。`subprocess.run()` で Claude CLI (`claude -p`) または Gemi
 ## Conventions
 
 - 言語: コード内コメント・ログ・ドキュメントはすべて日本語
-- セッション管理: `storage_state.json` に Playwright セッションを保存。ログイン失敗時はこのファイルを削除して再実行
-- 実行時生成物: `data/` 配下（downloads / reports / hrmos.db）は `.gitignore` 対象
+- セッション管理: `storage_state.json` に Playwright セッションを保存。セッション有効性は URL 判定だけでなく応募者一覧（`/interviews/screening/` リンク）の描画有無まで確認し、失効途中（URL は正常だが一覧が空）でも自動再ログインする（`browser/auth.py`）。ログイン失敗時はこのファイルを削除して再実行
+- 実行時生成物: `data/` 配下（downloads / reports / logs / debug / hrmos.db）は `.gitignore` 対象。`debug/` は応募者0件など異常時の画面・HTML（`applicant_list_empty_*.png/.html`）の保存先で原因切り分け用
 - CSSセレクタ: HRMOS ページの要素セレクタは `browser/selectors.py` に集約。UI変更時はここを修正
 - 改修履歴: `improvement_list/` に `YYYY-MM-DD_{説明}.md` 形式で記録

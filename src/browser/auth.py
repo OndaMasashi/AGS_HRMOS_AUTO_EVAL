@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from playwright.async_api import Page, BrowserContext
+from playwright.async_api import Page, BrowserContext, TimeoutError as PlaywrightTimeoutError
 
 from src.browser.selectors import LoginSelectors
 
@@ -63,20 +63,61 @@ async def ensure_authenticated(context: BrowserContext, page: Page, config: dict
     logger.info("セッション有効性を確認中...")
     await page.goto(base_url, wait_until="networkidle")
 
-    # ログインページにリダイレクトされていなければセッション有効
     current_url = page.url
-    if "login" not in current_url.lower() and "signin" not in current_url.lower():
-        logger.info("既存セッションが有効です")
-        return True
+    redirected_to_login = (
+        "login" in current_url.lower() or "signin" in current_url.lower()
+    )
+
+    if not redirected_to_login:
+        # URL だけでは「URL は /interviews のままだがデータ取得が未認証で
+        # 一覧が空」というセッション失効途中の中間状態を見逃す。応募者一覧が
+        # 実際に描画されているかまで確認する。
+        if await _applicant_list_rendered(page):
+            logger.info("既存セッションが有効です")
+            return True
+        logger.warning(
+            "URL は一覧ページですが応募者一覧が描画されていません"
+            "（セッション失効の可能性）。再ログインします..."
+        )
+    else:
+        logger.info("セッション無効。再ログインします...")
 
     # セッションが無効なのでログイン
-    logger.info("セッション無効。再ログインします...")
     success = await login(page, config)
 
     if success:
         await save_session(context)
 
     return success
+
+
+async def _applicant_list_rendered(page: Page, timeout_ms: int = 8000) -> bool:
+    """応募者一覧が実際に描画されているか確認する。
+
+    応募者リンク（/interviews/ 等を含むリンク）または「さらに表示」ボタンの
+    出現を待ち、いずれかが存在すれば一覧が描画済みとみなす。描画前のレースに
+    対する猶予として最大 timeout_ms 待つ。
+    """
+    # 応募者個別ページ（/interviews/screening/<id>）のリンクに限定する。
+    # 単なる /interviews/ ではナビゲーション等のリンクを誤検知し、失効途中
+    # （一覧は空だがメニューは描画される）を見逃す恐れがあるため。
+    applicant_link = page.locator(
+        'a[href*="/interviews/screening/"], a[href*="/candidates/"], a[href*="/applicants/"]'
+    )
+    try:
+        await applicant_link.first.wait_for(state="attached", timeout=timeout_ms)
+        return True
+    except PlaywrightTimeoutError:
+        pass
+
+    # フォールバック: 「さらに表示」ボタンがあれば一覧は描画されている
+    try:
+        if await page.get_by_text("さらに表示").count() > 0:
+            return True
+    except Exception:
+        pass
+
+    return False
 
 
 async def save_session(context: BrowserContext):
