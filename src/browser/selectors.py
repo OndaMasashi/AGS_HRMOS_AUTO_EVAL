@@ -23,6 +23,17 @@ class ApplicantListSelectors:
     # 例: " 書類選考 / 評価未入力 玉井 晴香 / 成城大学 ..."
     APPLICANT_LINK_ROLE = "link"
 
+    # 一覧が実際に描画されたかの判定に使う CSS セレクタ。
+    # 単なる /interviews/ ではナビゲーション等のリンクを誤検知するため、
+    # 応募者個別ページ（/interviews/screening/<id> 等）に限定する。
+    # NOTE: 収集時の判定は navigator._is_applicant_link 側にあり、取りこぼしを
+    # 避けるため意図的にこれより広い（/interviews/ 全般を許容）。
+    APPLICANT_LINK_CSS = (
+        'a[href*="/interviews/screening/"], '
+        'a[href*="/candidates/"], '
+        'a[href*="/applicants/"]'
+    )
+
 
 class ApplicantDetailSelectors:
     """応募者個別ページ"""

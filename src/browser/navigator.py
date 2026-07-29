@@ -7,11 +7,16 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse, urljoin
 
-from playwright.async_api import Page
+from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
+from src.browser.page_utils import IDLE_TIMEOUT_MS, goto_with_retry
 from src.browser.selectors import ApplicantListSelectors, ApplicantDetailSelectors
 
 logger = logging.getLogger(__name__)
+
+# 「さらに表示」の繰り返し上限。通信の静止を待てなくても続行する方針にしたため、
+# ボタンが消えない異常時に際限なく回り続けないよう安全弁を置く。
+MAX_LOAD_MORE_ROUNDS = 50
 
 
 async def collect_applicant_links(page: Page, config: dict) -> list[dict]:
@@ -20,7 +25,11 @@ async def collect_applicant_links(page: Page, config: dict) -> list[dict]:
     wait_sec = config["scan"].get("wait_between_pages", 2)
 
     logger.info(f"応募者一覧ページに遷移: {base_url}")
-    await page.goto(base_url, wait_until="networkidle")
+    # 通信が静止しないまま先に進むと「さらに表示」を取りこぼして応募者が
+    # 欠けるため、応募者リンクの出現までは待つ（0 件なら後段で診断を残す）。
+    await goto_with_retry(
+        page, base_url, ready_selector=ApplicantListSelectors.APPLICANT_LINK_CSS
+    )
 
     # NOTE: デフォルトでは「評価未入力」のみ表示（軽量）。
     # 「評価入力済」も含めたい場合は下記を有効化（全件読み込みで数分かかる）
@@ -29,6 +38,13 @@ async def collect_applicant_links(page: Page, config: dict) -> list[dict]:
     # 「さらに表示」を繰り返しクリックして全応募者を読み込む
     load_round = 1
     while True:
+        if load_round > MAX_LOAD_MORE_ROUNDS:
+            logger.warning(
+                f"「さらに表示」の繰り返しが上限 {MAX_LOAD_MORE_ROUNDS} 回に達しました。"
+                "応募者を取りこぼしている可能性があります"
+            )
+            break
+
         show_more = page.get_by_text("さらに表示")
         if await show_more.count() == 0:
             break
@@ -36,12 +52,28 @@ async def collect_applicant_links(page: Page, config: dict) -> list[dict]:
         try:
             logger.info(f"「さらに表示」をクリック（{load_round}回目）...")
             await show_more.first.click()
-            await page.wait_for_load_state("networkidle")
-            await asyncio.sleep(wait_sec)
-            load_round += 1
         except Exception as e:
+            # クリックできない＝ボタンが消えた等。読み込みは終わったとみなす
             logger.debug(f"「さらに表示」のクリック終了: {e}")
             break
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=IDLE_TIMEOUT_MS)
+        except PlaywrightTimeoutError:
+            # 通信が静止しなくても、次の周回でボタンの有無を見れば継続の判断は
+            # できる。ここで打ち切ると応募者を取りこぼしたまま正常終了する。
+            logger.warning(
+                f"「さらに表示」後に通信が静止しませんでした（{load_round}回目、続行）"
+            )
+        except Exception as e:
+            # ページが閉じた等の異常。それまでに読み込めた分を返して打ち切る
+            logger.warning(
+                f"「さらに表示」後の待機が中断されました（{load_round}回目）: {e}"
+            )
+            break
+
+        await asyncio.sleep(wait_sec)
+        load_round += 1
 
     logger.info("全応募者の読み込み完了。リンクを収集中...")
 
@@ -130,9 +162,7 @@ async def _dump_debug_artifacts(page: Page, config: dict, label: str) -> None:
 async def get_attachment_links(page: Page, applicant_url: str) -> list[dict]:
     """応募者個別ページから添付ファイル情報を取得する"""
     logger.info(f"応募者ページに遷移: {applicant_url}")
-    await page.goto(applicant_url, wait_until="networkidle")
-
-    attachments = []
+    await goto_with_retry(page, applicant_url)
 
     # 「履歴書・職務経歴書の確認」リンクをクリックして添付セクションを表示
     try:
@@ -168,9 +198,36 @@ async def get_attachment_links(page: Page, applicant_url: str) -> list[dict]:
     except Exception:
         pass
 
-    # ファイル名テキスト（.pdf / .docx / .xlsx 等）を探す
-    # 複数ファイルに対応: 各拡張子で全てのマッチを収集
+    attachments = await _find_attachment_names(page)
+
+    # 0 件が「本当に添付が無い」のか「描画が間に合わなかった」のかは、この時点
+    # では区別がつかない。後者のまま返すと呼び出し側で添付なしとして scanned に
+    # 記録され、--all で再評価するまで書類なしのままになる（サイレントな欠落）。
+    # 通信の静止をもう一度待って一度だけ探し直す。
+    if not attachments:
+        try:
+            await page.wait_for_load_state("networkidle", timeout=IDLE_TIMEOUT_MS)
+        except Exception as e:
+            logger.debug(f"  再探索前の待機を完了できませんでした: {type(e).__name__}")
+        attachments = await _find_attachment_names(page)
+
+    if attachments:
+        logger.info(f"  添付ファイル {len(attachments)} 件を発見")
+    else:
+        # 添付なしは正常なケースもあるが、取りこぼしと区別できないため警告で残す
+        logger.warning(f"  添付ファイルが見つかりませんでした（現在URL: {page.url}）")
+
+    return attachments
+
+
+async def _find_attachment_names(page: Page) -> list[dict]:
+    """ページ内のファイル名テキスト（.pdf / .docx / .xlsx 等）から添付情報を抽出する。
+
+    複数ファイルに対応するため、各拡張子で全てのマッチを収集する。
+    """
+    attachments = []
     seen_filenames = set()
+
     for ext in [".pdf", ".docx", ".doc", ".xlsx", ".xls"]:
         # 末尾マッチ($)を外し、拡張子を含むテキスト全般にマッチ
         file_elements = page.get_by_text(re.compile(rf"\{ext}", re.IGNORECASE))
@@ -203,7 +260,6 @@ async def get_attachment_links(page: Page, applicant_url: str) -> list[dict]:
             except Exception:
                 continue
 
-    logger.info(f"  添付ファイル {len(attachments)} 件を発見")
     return attachments
 
 

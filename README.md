@@ -16,8 +16,8 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 - **OS**: Windows 10/11
 - **Python**: 3.10 以上
 - **ブラウザ**: Chromium（Playwrightが自動インストール）
-- **Claude CLI**: インストール済みであること（claude.aiライセンス使用）※デフォルト
-- **Gemini CLI**: Geminiを使う場合（`npm install -g @google/gemini-cli`）※オプション
+- **Gemini CLI**: `config.yaml.example` の初期値は `gemini` のため、既定ではこちらが必要（`npm install -g @google/gemini-cli`）
+- **Claude CLI**: `evaluation.provider` を `"claude"` に変更する場合に必要（claude.aiライセンス使用）
 
 ## セットアップ手順
 
@@ -200,29 +200,45 @@ email:
 
 ## タスクスケジューラ（自動実行）
 
-Windowsタスクスケジューラで定期実行を設定できます。
+`setup_scheduler.bat` を管理者権限で実行すると、平日 12:30 と 17:30 に `run_scan.bat` を実行するタスクが登録されます（タスク名: `HRMOS_AutoEval_1230` / `HRMOS_AutoEval_1730`）。実行ログは `data/logs/scan_YYYYMMDD_HHMM.log` に残ります。
 
-### 登録コマンド例
+### 登録
 
 ```powershell
-# 平日 12:00 に実行
-schtasks /create /tn "HRMOS_Eval_Noon" /tr "\"C:\Users\<ユーザー名>\AppData\Local\Programs\Python\Python313\python.exe\" \"C:\work\AGS_HRMOS_AUTO_EVAL\run.py\" scan" /sc weekly /d MON,TUE,WED,THU,FRI /st 12:00
-
-# 平日 17:00 に実行
-schtasks /create /tn "HRMOS_Eval_Evening" /tr "\"C:\Users\<ユーザー名>\AppData\Local\Programs\Python\Python313\python.exe\" \"C:\work\AGS_HRMOS_AUTO_EVAL\run.py\" scan" /sc weekly /d MON,TUE,WED,THU,FRI /st 17:00
+# 管理者権限で実行
+setup_scheduler.bat
 ```
 
 ### 管理
 
 ```powershell
-# タスク一覧の確認
-schtasks /query /tn HRMOS_Eval_Noon
+# 状態・前回実行結果・次回実行時刻の確認
+Get-ScheduledTask -TaskName HRMOS_AutoEval_1230 | Get-ScheduledTaskInfo
 
 # タスクの削除
-schtasks /delete /tn "HRMOS_Eval_Noon" /f
+schtasks /delete /tn "HRMOS_AutoEval_1230" /f
 ```
 
-> **注意**: PCがログオン状態でないとタスクは実行されません（Interactive onlyモード）。
+### PCがスリープする環境での設定
+
+既定のままだと、実行時刻にPCがスリープ・電源オフの場合はその回がスキップされ、**ログもメール通知も残りません**（無音で1回分が失われる）。以下を設定しておくと、復帰後に自動実行されます。
+
+```powershell
+foreach ($n in 'HRMOS_AutoEval_1230','HRMOS_AutoEval_1730') {
+    $t = Get-ScheduledTask -TaskName $n
+    $s = $t.Settings
+    $s.StartWhenAvailable = $true          # 逃した回を復帰後に実行する
+    $s.WakeToRun = $true                   # 実行時刻にPCを起こす
+    $s.DisallowStartIfOnBatteries = $false # バッテリー駆動でも実行する
+    $s.StopIfGoingOnBatteries = $false     # 実行中に電源が外れても中断しない
+    Set-ScheduledTask -TaskName $n -Settings $s
+}
+```
+
+> **注意**:
+>
+> - `setup_scheduler.bat` は既存タスクを削除して作り直すため、**再実行すると上記の設定は失われます**。再登録したら設定し直してください。
+> - `WakeToRun` はOS側のスリープ解除タイマーが有効な場合のみ機能します。`powercfg /query SCHEME_CURRENT SUB_SLEEP RTCWAKE` が `0x00000000` を返す環境では効きません（`StartWhenAvailable` による復帰後の実行は機能します）。
 
 ## 出力ファイル
 
@@ -238,14 +254,20 @@ schtasks /delete /tn "HRMOS_Eval_Noon" /f
 ```
 AGS_HRMOS_AUTO_EVAL/
 ├── run.py                  # CLIエントリーポイント
+├── setup.bat               # 初回セットアップ（venv・依存パッケージ・Chromium）
+├── run_scan.bat            # scan 実行（ログを data/logs/ に出力）
+├── setup_scheduler.bat     # タスクスケジューラ登録（平日 12:30 / 17:30）
 ├── config.yaml.example     # 設定ファイルのテンプレート
 ├── requirements.txt        # Python依存パッケージ
+├── ROADMAP.md              # 未対応タスク一覧
+├── Architecture.md         # アーキテクチャ解説
 ├── src/
 │   ├── main.py             # メインオーケストレーター
 │   ├── config.py           # 設定管理（YAML + 環境変数）
 │   ├── browser/
-│   │   ├── auth.py         # HRMOS認証（2段階ログイン）
+│   │   ├── auth.py         # HRMOS認証（2段階ログイン・セッション有効性判定）
 │   │   ├── navigator.py    # 応募者一覧巡回・ダウンロード
+│   │   ├── page_utils.py   # ページ遷移の共通処理（リトライ付き）
 │   │   └── selectors.py    # ページ要素のセレクタ定義
 │   ├── parser/
 │   │   └── document.py     # PDF/Word/Excelテキスト抽出
@@ -253,6 +275,7 @@ AGS_HRMOS_AUTO_EVAL/
 │   │   ├── llm_client.py        # LLMプロバイダー切替（Claude/Gemini）
 │   │   ├── claude_client.py     # Claude CLI呼び出し（リトライ付き）
 │   │   ├── gemini_client.py     # Gemini CLI呼び出し（リトライ付き）
+│   │   ├── pii_masker.py        # LLM送信前の個人情報マスキング
 │   │   ├── prompt_builder.py    # 評価プロンプト構築
 │   │   └── response_parser.py   # JSON応答パース・検証
 │   ├── database/
@@ -261,6 +284,10 @@ AGS_HRMOS_AUTO_EVAL/
 │   └── reporter/
 │       ├── export.py       # Excel評価レポート出力
 │       └── notify.py       # メール通知（Resend）
+├── tests/
+│   └── test_pii_masker.py  # PIIマスキングのユニットテスト（pytest は別途要インストール）
+├── improvement_list/       # 改修履歴（YYYY-MM-DD_{説明}.md）
+├── docs/                   # 総括報告書・アーキテクチャ図
 └── data/                   # 実行時に自動生成
     ├── downloads/
     ├── reports/
@@ -331,6 +358,21 @@ python run.py scan
 
 - `data/debug/applicant_list_empty_*.png/.html` に失敗時点の画面が保存されます。ログイン画面が写っていればセッション要因、一覧の構造が変わっていればHRMOSのUI変更（`src/browser/selectors.py` の見直しが必要）です。
 - 手動で復旧する場合は `storage_state.json` を削除して再実行します。
+
+### 定期実行された形跡がない（ログもメールも届かない）
+
+`data/logs/` に該当時刻のログが**無い**場合、実行して失敗したのではなく**そもそも起動していません**。この場合はアプリ側のログもメール通知も一切残らないため、ログだけ見ると「何も起きていない」ように見えます。
+
+```powershell
+# タスクの前回実行時刻と結果を確認（0x800710E0 = 実行条件を満たさず拒否された）
+Get-ScheduledTask -TaskName HRMOS_AutoEval_1730 | Get-ScheduledTaskInfo
+
+# その時刻にPCが動いていたかを確認（42=スリープ開始 / 107=復帰）
+Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-Kernel-Power'; Id=42,107,506,507} -MaxEvents 20 |
+    Select-Object TimeCreated, Id
+```
+
+PCのスリープが原因だった場合は、「タスクスケジューラ（自動実行）」の **PCがスリープする環境での設定** を適用してください。
 
 ## 改修履歴（improvement_list/）
 

@@ -5,7 +5,8 @@ from pathlib import Path
 
 from playwright.async_api import Page, BrowserContext, TimeoutError as PlaywrightTimeoutError
 
-from src.browser.selectors import LoginSelectors
+from src.browser.page_utils import goto_with_retry
+from src.browser.selectors import ApplicantListSelectors, LoginSelectors
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ async def login(page: Page, config: dict) -> bool:
     password = config["credentials"]["password"]
 
     logger.info(f"ログインページに遷移: {login_url}")
-    await page.goto(login_url, wait_until="networkidle")
+    await goto_with_retry(page, login_url)
 
     try:
         # Step 1: メールアドレス入力 → 「続行」クリック
@@ -61,7 +62,7 @@ async def ensure_authenticated(context: BrowserContext, page: Page, config: dict
 
     # まずセッションが有効か確認（直接アクセスしてみる）
     logger.info("セッション有効性を確認中...")
-    await page.goto(base_url, wait_until="networkidle")
+    await goto_with_retry(page, base_url)
 
     current_url = page.url
     redirected_to_login = (
@@ -94,16 +95,12 @@ async def ensure_authenticated(context: BrowserContext, page: Page, config: dict
 async def _applicant_list_rendered(page: Page, timeout_ms: int = 8000) -> bool:
     """応募者一覧が実際に描画されているか確認する。
 
-    応募者リンク（/interviews/ 等を含むリンク）または「さらに表示」ボタンの
-    出現を待ち、いずれかが存在すれば一覧が描画済みとみなす。描画前のレースに
-    対する猶予として最大 timeout_ms 待つ。
+    応募者個別ページへのリンク（APPLICANT_LINK_CSS。ナビゲーション等の誤検知を
+    避けるため対象を絞っている。理由はセレクタ定義側のコメントを参照）または
+    「さらに表示」ボタンの出現を待ち、いずれかが存在すれば一覧が描画済みと
+    みなす。描画前のレースに対する猶予として最大 timeout_ms 待つ。
     """
-    # 応募者個別ページ（/interviews/screening/<id>）のリンクに限定する。
-    # 単なる /interviews/ ではナビゲーション等のリンクを誤検知し、失効途中
-    # （一覧は空だがメニューは描画される）を見逃す恐れがあるため。
-    applicant_link = page.locator(
-        'a[href*="/interviews/screening/"], a[href*="/candidates/"], a[href*="/applicants/"]'
-    )
+    applicant_link = page.locator(ApplicantListSelectors.APPLICANT_LINK_CSS)
     try:
         await applicant_link.first.wait_for(state="attached", timeout=timeout_ms)
         return True

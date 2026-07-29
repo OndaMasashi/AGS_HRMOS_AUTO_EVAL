@@ -34,7 +34,7 @@ python run.py status
 python run.py -v scan
 ```
 
-テストフレームワークは未導入。
+テストは `tests/test_pii_masker.py`（pytest ベース、PII マスキングのユニットテスト）のみ。ただし pytest は `requirements.txt` に含まれず `.venv` にも未導入のため、現状そのままでは実行できない（`pip install pytest` が必要）。
 
 ## Architecture
 
@@ -84,4 +84,5 @@ APIキー不要。`subprocess.run()` で Claude CLI (`claude -p`) または Gemi
 - セッション管理: `storage_state.json` に Playwright セッションを保存。セッション有効性は URL 判定だけでなく応募者一覧（`/interviews/screening/` リンク）の描画有無まで確認し、失効途中（URL は正常だが一覧が空）でも自動再ログインする（`browser/auth.py`）。ログイン失敗時はこのファイルを削除して再実行
 - 実行時生成物: `data/` 配下（downloads / reports / logs / debug / hrmos.db）は `.gitignore` 対象。`debug/` は応募者0件など異常時の画面・HTML（`applicant_list_empty_*.png/.html`）の保存先で原因切り分け用
 - CSSセレクタ: HRMOS ページの要素セレクタは `browser/selectors.py` に集約。UI変更時はここを修正
-- 改修履歴: `improvement_list/` に `YYYY-MM-DD_{説明}.md` 形式で記録
+- ページ遷移: `page.goto()` を直接呼ばず `browser/page_utils.py` の `goto_with_retry()` を使う。`wait_until="networkidle"` の一発勝負は一時的な遅延で実行全体を落とすため、遷移は `domcontentloaded` で成立させ、`networkidle` は未到達でも続行する扱いにしている（遷移失敗のみ最大3回試行＝初回＋リトライ2回）。描画完了が必須の箇所は `ready_selector` で要素の出現を待つ
+- 改修履歴: `improvement_list/` に `YYYY-MM-DD_{説明}.md` 形式で記録。未対応タスクは `ROADMAP.md` の上部に残す
