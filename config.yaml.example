@@ -1,13 +1,19 @@
 hrmos:
   base_url: "https://hrmos.co/interviews"
-  login_url: "https://hrmos.co/login"  # 実際のログインURLに変更してください
+  login_url: "https://hrmos.co/login"
 
-# 認証情報（環境変数 HRMOS_EMAIL / HRMOS_PASSWORD でも指定可）
+# 認証情報
+# setup\install.bat を実行すると、ここではなく Windows のユーザー環境変数
+# （HRMOS_EMAIL / HRMOS_PASSWORD）に保存されます。環境変数があればそちらが優先されます。
+# フォルダごとコピーしても認証情報が持ち出されないようにするため、この欄は空のままを推奨します。
 credentials:
   email: ""
   password: ""
 
 # AI評価基準
+# name（項目名）と description（AIに伝える評価の観点）の組を自由に追加・変更できます。
+# 各項目は1〜5点で採点されます。description を具体的に書くほど評価が安定します。
+# 項目数に制限はありませんが、増やすほど1件あたりの処理時間と費用が伸びます。
 evaluation_criteria:
   - name: "IT業界経験年数"
     description: "IT業界としての経験年数を経歴の執務期間と経験内容から判断してください。長いほど評価を高くします。"
@@ -17,16 +23,33 @@ evaluation_criteria:
     description: "IT開発の上流工程である要件定義や設計工程に関わる経験と深さ"
   - name: "マネジメント経験"
     description: "チームリーダー、プロジェクトマネジメント、プロジェクトリーダー、サブリーダー等の経験の有無と深さ"
-  - name: "資格保有状況"
-    description: "IT関連資格（AWS認定、PMP、ITIL、等）の有無と希少な資格の有無の状況"
-  - name: "同一環境での長期執務"
+  - name: "FDE気質度合い"
+    description: "FDE(Front Deployed Engineer)的な顧客前線で提案型で遂行できる経験や素養があるか"
+  - name: "同一環境での長期安定稼働"
     description: "転職回数や1回あたりの転職の間隔が2年未満であったり、1回あたりの案件の期間が3ヵ月以内が多い場合は評価を下げる"
   - name: "自己学習・成長意欲"
     description: "自己学習として業務以外で何か意欲的に取り組んでいることが分かる場合評価をする。判断できない場合は評価無しとする"
 
 # AI評価設定
 evaluation:
-  provider: "gemini"              # "claude" or "gemini"（デフォルト: gemini）
+  # "gemini_api" : Gemini REST API をAPIキーで直接呼ぶ（推奨）。
+  #                CLI も Node.js もブラウザログインも不要で、無人実行に強い。
+  #                キーは環境変数 GEMINI_API_KEY で指定する（install.bat が設定する）。
+  #                キーの取得: https://aistudio.google.com/apikey
+  #                ※ 会社の Google Workspace ライセンスでは Gemini API は使えません。
+  #                   Workspace とは別に、Google Cloud での課金設定が必要です。
+  #                ※ 無料枠のキーは入力内容が製品改善に利用される規約のため、
+  #                   応募者書類を扱う本ツールでは課金を有効にしたキーを使うこと。
+  # "claude"     : Claude CLI を使う。Pro/Max/Team 等の契約と初回ブラウザ認証が必要。
+  #                評価の費用は契約中のプランに含まれ、追加請求は発生しない。
+  # "gemini"     : Gemini CLI を使う（非推奨）。個人アカウント向け提供は
+  #                2026-06-18 に終了しており、通常は動作しない。
+  provider: "gemini_api"
+  # provider が gemini_api のときに使うモデル。
+  # gemini-3.5-flash-lite は gemini-2.5-flash と同単価（入力$0.30/出力$2.50 per 1M）だが、
+  # 実測で約5倍速く（3.9秒 vs 20.2秒/名）、既存のClaude評価との一致度も高い。
+  model: "gemini-3.5-flash-lite"
+  gemini_api_key: ""              # 環境変数 GEMINI_API_KEY での指定を推奨
   system_instructions: |
     書類の内容に基づいて客観的に評価してください。
     推測ではなく、書類に明記されている情報のみを根拠にしてください。
@@ -40,8 +63,10 @@ evaluation:
 interview_questions:
   count: 3
   perspective: |
-    応募者の自律性や自己成長意欲を確認する質問、マネジメント面でQCDに関する考え方を問う質問、
-    スキルが伴っており表面的に業務を行ってきていないことを確認する質問、などの履歴書から読み取れない意識面を問う質問をしたい。
+    成長意欲を確認するため、応募者の自律性や自己成長意欲や取り組み有無を確認する質問。
+    35歳以上であれば、マネジメント面の素養を確認するため、「メタ認知思考」の可否を問う質問。
+    また、同じくマネジメント面でQCDに関する意識の高さや具体的な手法の有無を問う質問。
+    以上、経歴書から読み取れない意識面を問う質問をする。
 
 scan:
   download_dir: "./data/downloads"
@@ -51,13 +76,38 @@ scan:
   headless: false              # true: ブラウザ非表示 / false: ブラウザ表示
   delete_downloads_after: false # true: 解析後にダウンロードファイルを削除
 
-# メール通知設定（Resend）
+# メール通知設定（Resend）- 任意
+# 設定しなくてもAI評価とExcel出力は通常どおり動作します。
+# 有効にすると、評価結果／新規0件の通知／失敗アラートのいずれかが必ず届くため、
+# 「無音で止まっていた」ことに気づけます。設定手順は SETUP_GUIDE.html を参照。
 email:
   enabled: false
-  api_key: ""                    # 環境変数 RESEND_API_KEY でも指定可
+  api_key: ""                    # 環境変数 RESEND_API_KEY での指定を推奨
   from: "onboarding@resend.dev"  # 送信元（独自ドメイン設定後に変更）
   to:
-    - ""
+    - ""                         # 受け取りたいアドレス（複数指定可）
   subject_prefix: "[HRMOS]"
-  attach_resumes: true           # true: 1次通過候補(○)の経歴書をメール添付。経歴書はマスクなしの個人情報を含むため社内ポリシー確認のうえ運用すること
+  attach_resumes: true           # true: 1次通過候補(○)の経歴書を添付。
+                                 # 添付ファイルは伏字にしていない個人情報を含むため、
+                                 # 社内ポリシーを確認のうえ運用すること。
   notify_on_no_candidates: true  # true: 新規応募者0件で正常終了した時も「新規なし」通知を送る（無音による誤認防止）。失敗アラートは常時送信
+
+# 1次通過候補の判定基準（年齢帯ごとの平均点しきい値）
+# 平均点 >= min_avg_score なら「○」、その 0.3 点手前までなら「△」。
+# 未設定だと全員が空欄になり、Excelの「1次通過候補」列とメール通知の候補抽出が
+# 無言で機能しなくなるので注意。
+first_pass_criteria:
+  - age_range: [20, 24]
+    min_avg_score: 2.0
+  - age_range: [25, 29]
+    min_avg_score: 2.4
+  - age_range: [30, 34]
+    min_avg_score: 2.9
+  - age_range: [35, 39]
+    min_avg_score: 3.3
+  - age_range: [40, 44]
+    min_avg_score: 3.5
+  - age_range: [45, 49]
+    min_avg_score: 3.7
+  - age_range: [50, 54]
+    min_avg_score: 3.9

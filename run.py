@@ -56,12 +56,26 @@ def main():
     # status コマンド
     subparsers.add_parser("status", help="評価進捗状況を表示")
 
+    # doctor コマンド
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="環境を自己診断する（導入直後の確認・トラブル切り分け用）"
+    )
+    doctor_parser.add_argument(
+        "--skip-llm", action="store_true", dest="skip_llm",
+        help="AI評価の疎通確認を省略する（APIコストを消費しない）"
+    )
+
     args = parser.parse_args()
     setup_logging(args.verbose)
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
+
+    # doctor は他モジュールの読み込み失敗自体を診断するため、先に分岐する
+    if args.command == "doctor":
+        from src.doctor import run_doctor
+        sys.exit(run_doctor(args.config, args.skip_llm))
 
     from src.main import run_scan, run_report, show_status
 

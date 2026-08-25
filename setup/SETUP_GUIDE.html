@@ -1,0 +1,1048 @@
+<title>HRMOS評価ツール 導入ガイド</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+:root {
+  /* 冷たすぎない紙色に、わずかに青を含ませたニュートラル */
+  --paper:      #F6F7F5;
+  --surface:    #FFFFFF;
+  --surface-2:  #EEF0EE;
+  --ink:        #1B2024;
+  --ink-2:      #4A545B;
+  --ink-3:      #5F6A70;   /* 本文にも使うため WCAG AA(4.5:1) を満たす濃さにする */
+  --rule:       #DCE0DD;
+  --rule-2:     #C6CCC7;
+
+  --accent:     #2F6169;   /* 深いティール。計器や設備の表示色から */
+  --accent-ink: #244E55;
+  --accent-bg:  #E4EDED;
+
+  --warn:       #8A5B0B;
+  --warn-bg:    #FBF1DE;
+  --warn-rule:  #DFB760;
+
+  --danger:     #A03A31;
+  --danger-bg:  #FBEAE7;
+  --danger-rule:#D89189;
+
+  --good:       #2C6448;
+  --good-bg:    #E4EFE8;
+
+  --shadow: 0 1px 2px rgba(27,32,36,.05), 0 8px 24px -12px rgba(27,32,36,.18);
+
+  --display: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --body: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #14181A;
+    --surface:    #1B2023;
+    --surface-2:  #232A2D;
+    --ink:        #E6EAE8;
+    --ink-2:      #A9B4B5;
+    --ink-3:      #7B8789;
+    --rule:       #2C3437;
+    --rule-2:     #3C4649;
+
+    --accent:     #6FB3B8;
+    --accent-ink: #8FC9CD;
+    --accent-bg:  #1E2E31;
+
+    --warn:       #D9A94E;
+    --warn-bg:    #2A2418;
+    --warn-rule:  #6B5628;
+
+    --danger:     #E08A80;
+    --danger-bg:  #2C1D1B;
+    --danger-rule:#6B3A34;
+
+    --good:       #74B894;
+    --good-bg:    #1A2A22;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:      #14181A;
+  --surface:    #1B2023;
+  --surface-2:  #232A2D;
+  --ink:        #E6EAE8;
+  --ink-2:      #A9B4B5;
+  --ink-3:      #7B8789;
+  --rule:       #2C3437;
+  --rule-2:     #3C4649;
+
+  --accent:     #6FB3B8;
+  --accent-ink: #8FC9CD;
+  --accent-bg:  #1E2E31;
+
+  --warn:       #D9A94E;
+  --warn-bg:    #2A2418;
+  --warn-rule:  #6B5628;
+
+  --danger:     #E08A80;
+  --danger-bg:  #2C1D1B;
+  --danger-rule:#6B3A34;
+
+  --good:       #74B894;
+  --good-bg:    #1A2A22;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px 96px;
+}
+
+/* ---------------------------------------------------------------- masthead */
+
+.masthead {
+  padding: 72px 0 40px;
+  border-bottom: 2px solid var(--ink);
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 18px;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: clamp(34px, 6vw, 56px);
+  line-height: 1.2;
+  letter-spacing: .01em;
+  margin: 0 0 20px;
+  text-wrap: balance;
+}
+.standfirst {
+  font-size: 17px;
+  color: var(--ink-2);
+  max-width: 62ch;
+  margin: 0;
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+.fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+.fact b {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.cols {
+  display: grid;
+  grid-template-columns: 218px minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+  margin-top: 48px;
+}
+@media (max-width: 860px) {
+  .cols { grid-template-columns: 1fr; gap: 0; }
+  nav.rail { position: static; margin-bottom: 40px; }
+}
+
+nav.rail {
+  position: sticky;
+  top: 28px;
+  font-size: 14px;
+}
+nav.rail p {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 14px;
+}
+nav.rail ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+nav.rail a {
+  display: flex;
+  gap: 10px;
+  padding: 7px 10px 7px 0;
+  color: var(--ink-2);
+  text-decoration: none;
+  border-left: 2px solid var(--rule);
+  padding-left: 14px;
+  transition: color .15s, border-color .15s;
+}
+nav.rail a:hover, nav.rail a:focus-visible {
+  color: var(--accent-ink);
+  border-left-color: var(--accent);
+}
+nav.rail a .n {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  min-width: 1.4em;
+  font-variant-numeric: tabular-nums;
+}
+
+main { min-width: 0; }
+
+/* ---------------------------------------------------------------- sections */
+
+section { margin-bottom: 60px; scroll-margin-top: 24px; }
+
+h2 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.4;
+  margin: 0 0 8px;
+  text-wrap: balance;
+}
+h4.mini {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  margin: 26px 0 8px;
+  padding-left: 11px;
+  border-left: 3px solid var(--accent);
+  color: var(--accent-ink);
+}
+h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 18px;
+  margin: 36px 0 10px;
+}
+p { margin: 0 0 16px; max-width: 68ch; }
+main ul, main ol { max-width: 66ch; padding-left: 1.3em; margin: 0 0 18px; }
+main li { margin-bottom: 7px; }
+
+.step-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule-2);
+  margin-bottom: 22px;
+}
+.step-num {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--surface);
+  background: var(--accent);
+  border-radius: 2px;
+  padding: 4px 9px;
+  margin-top: 6px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.step-head h2 { margin: 0; }
+.step-head .sub { color: var(--ink-2); font-size: 14px; margin: 4px 0 0; }
+
+/* --------------------------------------------------------------- callouts */
+
+.note {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-bg);
+  padding: 16px 20px;
+  margin: 0 0 22px;
+  border-radius: 0 3px 3px 0;
+}
+.note.warn   { border-left-color: var(--warn-rule); background: var(--warn-bg); }
+.note.danger { border-left-color: var(--danger-rule); background: var(--danger-bg); }
+.note.good   { border-left-color: var(--good); background: var(--good-bg); }
+.note > :last-child { margin-bottom: 0; }
+.note .label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+  color: var(--accent-ink);
+}
+.note.warn .label   { color: var(--warn); }
+.note.danger .label { color: var(--danger); }
+.note.good .label   { color: var(--good); }
+.note p { max-width: none; }
+
+/* ----------------------------------------------------------------- tables */
+
+.tw { overflow-x: auto; margin: 0 0 24px; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  background: var(--surface-2);
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+tr:last-child td { border-bottom: none; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap; }
+
+/* ------------------------------------------------------------------- code */
+
+code {
+  font-family: var(--mono);
+  font-size: .88em;
+  background: var(--surface-2);
+  padding: 2px 6px;
+  border-radius: 2px;
+  word-break: break-all;
+}
+pre {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.7;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-2);
+  border-radius: 0 3px 3px 0;
+  padding: 16px 18px;
+  overflow-x: auto;
+  margin: 0 0 22px;
+}
+pre code { background: none; padding: 0; word-break: normal; }
+
+/* コードブロックは用途で見た目を分ける。
+   「自分が打つもの」と「画面に出るもの」が同じ見た目だと、
+   読み手が毎回どちらか判断しなければならず手が止まる。 */
+.blk { margin: 0 0 22px; }
+.blk > .cap {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase;
+  padding: 6px 12px; border: 1px solid var(--rule);
+  border-bottom: none; border-radius: 3px 3px 0 0;
+  background: var(--surface-2); color: var(--ink-2);
+}
+.blk > pre { margin: 0; border-radius: 0 0 3px 3px; }
+
+/* 打つもの: 左に濃いアクセント。入力を促す見た目 */
+.blk.type > .cap { color: var(--accent-ink); border-left: 3px solid var(--accent); }
+.blk.type > pre  { border-left: 3px solid var(--accent); background: var(--surface); }
+
+/* 出るもの: 画面の再現。枠を落ち着かせ、操作対象でないと分かるように */
+.blk.screen > .cap { border-left: 3px solid var(--rule-2); }
+.blk.screen > pre  { border-left: 3px solid var(--rule-2); background: var(--surface-2); }
+
+/* 質問されるもの: 画面に出るが、read手が答える必要がある */
+.blk.ask > .cap { color: var(--accent-ink); border-left: 3px solid var(--accent-soft, var(--accent)); }
+.blk.ask > pre  { border-left: 3px solid var(--accent-soft, var(--accent)); background: var(--surface); }
+
+/* 編集するもの: ファイルの中身 */
+.blk.edit > .cap { color: var(--warn); border-left: 3px solid var(--warn-rule); }
+.blk.edit > pre  { border-left: 3px solid var(--warn-rule); }
+pre .ok { color: var(--good); }
+pre .ng { color: var(--danger); }
+pre .dim { color: var(--ink-3); }
+
+/* ------------------------------------------------------- choice of models */
+
+.choice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin: 0 0 22px;
+}
+.opt {
+  background: var(--surface);
+  border: 1px solid var(--rule-2);
+  border-top: 3px solid var(--accent);
+  border-radius: 0 0 3px 3px;
+  padding: 20px 22px 22px;
+  box-shadow: var(--shadow);
+}
+.opt-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+}
+.opt-h {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+dl.spec { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; font-size: 14.5px; }
+dl.spec dt {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .06em;
+  color: var(--ink-3);
+  padding-top: 4px;
+  white-space: nowrap;
+}
+dl.spec dd { margin: 0; line-height: 1.7; }
+/* .muted は「補足」だが中身は読ませたい本文。読み飛ばしてよい印ではないので
+   本文色(ink-2)を使い、サイズだけ落として区別する。 */
+.muted { color: var(--ink-2); font-size: 14.5px; }
+
+/* ------------------------------------------------------------------ misc */
+
+.kbd {
+  font-family: var(--mono);
+  font-size: .85em;
+  border: 1px solid var(--rule-2);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 1px 6px;
+  background: var(--surface);
+}
+a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+hr { border: none; border-top: 1px solid var(--rule); margin: 44px 0; }
+
+footer {
+  border-top: 2px solid var(--ink);
+  margin-top: 20px;
+  padding-top: 24px;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.toggle {
+  position: fixed; top: 16px; right: 16px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+  background: var(--surface); color: var(--ink-2);
+  border: 1px solid var(--rule-2); border-radius: 2px;
+  padding: 7px 11px; cursor: pointer; z-index: 20;
+}
+.toggle:hover { color: var(--accent-ink); border-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<button class="toggle" id="tg" aria-label="表示テーマを切り替える">THEME</button>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Installation Guide</p>
+    <h1>HRMOS評価ツール<br>導入ガイド</h1>
+    <p class="standfirst">
+      応募者の書類をAIが自動で評価し、Excel にまとめるツールを、新しい Windows PC に導入する手順です。
+      画面の指示に従って進めれば完了します。専門知識は必要ありません。
+    </p>
+    <div class="facts">
+      <span class="fact">所要時間 <b>20〜30分</b></span>
+      <span class="fact">管理者権限 <b>不要</b></span>
+      <span class="fact">AI <b>Gemini / Claude</b></span>
+      <span class="fact">対応OS <b>Windows 10 / 11</b></span>
+    </div>
+  </header>
+
+  <div class="cols">
+    <nav class="rail" aria-label="目次">
+      <p>目次</p>
+      <ol>
+        <li><a href="#ai"><span class="n">準備</span><span>AIを決める</span></a></li>
+        <li><a href="#prep"><span class="n">準備</span><span>用意するもの</span></a></li>
+        <li><a href="#key"><span class="n">準備</span><span>APIキーの取得</span></a></li>
+        <li><a href="#s0"><span class="n">0</span><span>ブロック解除</span></a></li>
+        <li><a href="#s1"><span class="n">1</span><span>zip を展開</span></a></li>
+        <li><a href="#s2"><span class="n">2</span><span>install.bat を実行</span></a></li>
+        <li><a href="#s3"><span class="n">3</span><span>診断を確認</span></a></li>
+        <li><a href="#s4"><span class="n">4</span><span>実行する</span></a></li>
+        <li><a href="#mail"><span class="n">任意</span><span>メール通知</span></a></li>
+        <li><a href="#msg"><span class="n">補</span><span>出るメッセージ</span></a></li>
+        <li><a href="#trouble"><span class="n">補</span><span>困ったとき</span></a></li>
+        <li><a href="#ops"><span class="n">補</span><span>運用上の注意</span></a></li>
+        <li><a href="SETUP_GUIDE.ADVANCED.html"><span class="n">&rarr;</span><span>評価基準を変える</span></a></li>
+        <li><a href="OVERVIEW.html"><span class="n">&rarr;</span><span>何ができるか</span></a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+      <section id="ai">
+        <h2>どちらのAIを使うか決める</h2>
+        <p>このツールは <b>Gemini</b> と <b>Claude</b> のどちらでも動きます。導入の途中で選ぶので、先に決めておいてください。<b>評価の精度に大きな差はありません</b>。違うのは費用の払い方と、準備の手間です。</p>
+
+        <div class="choice">
+          <article class="opt">
+            <p class="opt-tag">選択肢 1</p>
+            <h3 class="opt-h">Gemini（APIキー）</h3>
+            <dl class="spec">
+              <dt>費用</dt><dd>使った分だけ。<b>応募者1名あたり約0.8円</b>（月200名で約160円）</dd>
+              <dt>必要なもの</dt><dd>会社の Google アカウントで発行したAPIキー<br><b>会社の Google Workspace ライセンスとは別に、API の課金設定が必要です</b></dd>
+              <dt>準備の手間</dt><dd><b>軽い。</b>追加ソフトの導入もブラウザでのログインも不要</dd>
+              <dt>向いている人</dt><dd>Claude の契約を持っていない人</dd>
+            </dl>
+          </article>
+
+          <article class="opt">
+            <p class="opt-tag">選択肢 2</p>
+            <h3 class="opt-h">Claude（サブスクリプション）</h3>
+            <dl class="spec">
+              <dt>費用</dt><dd><b>契約中のプランに含まれます。</b>使った分の追加請求はありません</dd>
+              <dt>必要なもの</dt><dd>Claude の Pro / Max / Team / Enterprise 契約</dd>
+              <dt>準備の手間</dt><dd>Claude Code の導入（自動）と、<b>初回に1度だけブラウザでログイン</b></dd>
+              <dt>向いている人</dt><dd>すでに Claude を契約している人</dd>
+            </dl>
+          </article>
+        </div>
+
+        <div class="note warn">
+          <span class="label">Claude を選ぶ場合の注意</span>
+          <p><b>1つの契約を複数人で共有することは規約で禁止されています。</b>使う人それぞれが自分の契約を持っている必要があります。</p>
+          <p><b>学習利用の設定を確認してください。</b>Claude の個人向けプラン（Pro / Max）は、設定が有効になっていると入力内容が今後のモデルの改善に使われます。応募者の書類を扱うため、<a href="https://claude.ai/settings/data-privacy-controls">claude.ai の設定画面</a>を開き、<b>「モデルの改善に役立てる」（Help improve Claude）</b>という項目が<b>オフ</b>になっていることを確認してください。<br>
+          （Team / Enterprise 契約では既定でオフのため、この確認は不要です）</p>
+        </div>
+      </section>
+
+      <section id="prep">
+        <h2>事前に用意するもの</h2>
+        <p>作業を始める前に、次を手元に用意してください。これが揃っていないと途中で止まります。</p>
+        <div class="tw">
+          <table>
+            <thead><tr><th>#</th><th>用意するもの</th><th>入手方法</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td><b>HRMOS採用のログインIDとパスワード</b></td><td>普段 HRMOS にログインしている情報</td></tr>
+              <tr><td class="num">2</td><td><b>Gemini APIキー</b><br><span class="muted">Gemini を選ぶ場合のみ</span></td><td>次の「APIキーの取得」を参照</td></tr>
+              <tr><td class="num">2'</td><td><b>Claude のログイン情報</b><br><span class="muted">Claude を選ぶ場合のみ</span></td><td>普段 claude.ai にログインしている情報</td></tr>
+              <tr><td class="num">3</td><td>配布された zip ファイル</td><td>管理者から受け取る</td></tr>
+              <tr><td class="num">4</td><td><b>Resend の APIキー</b><br><span class="muted">メール通知を使う場合のみ・任意</span></td><td>後述の「メール通知を有効にする」を参照。<b>使わなくてもツールは動きます</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <span class="label">Note</span>
+          <p>パスワードとAPIキーは手順の中で入力します。メモ帳などに貼り付けておくと確実です。入力した情報は Windows のユーザー設定に保存され、<b>フォルダをコピーしても持ち出されません</b>。</p>
+        </div>
+      </section>
+
+      <section id="key">
+        <h2>APIキーの取得</h2>
+        <p class="muted">Gemini を選んだ場合のみ必要です。Claude を選んだ方は読み飛ばして構いません。</p>
+
+        <div class="note warn">
+          <span class="label">先に知っておいてください — 会社の Google Workspace は使えません</span>
+          <p>
+            会社で契約している <b>Google Workspace（Gmail・ドキュメント等で Gemini が使えるライセンス）</b>と、
+            このツールが使う <b>Gemini API</b> は、<b>まったく別の契約</b>です。
+          </p>
+          <p>
+            Workspace のライセンスに含まれるのは「人がブラウザで操作する画面の中の Gemini」だけで、
+            <b>プログラムから呼び出す API の利用枠は含まれていません</b>。
+            そのため、<b>Workspace とは別に、API の利用料を支払う設定（課金の有効化）が必要</b>になります。
+          </p>
+          <p class="muted" style="margin-bottom:0">
+            ※ Workspace のプランを上げても、アドオンを追加購入しても、API が使えるようにはなりません。
+            費用は月あたり数百円程度です。
+          </p>
+        </div>
+        <ol>
+          <li>ブラウザで <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a> を開く</li>
+          <li><b>会社の Google アカウント</b>でログインする</li>
+          <li>「APIキーを作成」をクリックする</li>
+          <li>表示されたキー（<code>AIza</code> で始まる長い文字列）をコピーする</li>
+        </ol>
+        <div class="note danger">
+          <span class="label">重要 — 課金の有効化</span>
+          <p>そのキーのプロジェクトで<b>課金が有効になっている必要があります</b>。一覧の「請求階層」列が<b>「無料枠」</b>になっている場合は、「お支払い情報を設定」から支払い方法を登録してください。</p>
+          <p><b>理由：</b>無料枠は「入力内容を Google の製品改善に利用する」規約です。このツールは応募者の職務経歴書を送信するため、無料枠のままでは使えません。有料枠にすると「入力内容は製品改善に利用されない」扱いに変わります。<b>費用は月あたり数百円程度</b>です。</p>
+          <p><b>登録時の注意：</b>お支払いプロファイルの種別で <b>［ビジネス］を選んでください。この設定は後から変更できません。</b></p>
+          <p class="muted" style="margin-bottom:0">※ ここで登録する支払い方法は、Google Workspace の請求とは別建てになります。日本では<b>クレジットカード／デビットカードのみ</b>が利用でき、銀行口座からの引き落としには対応していません。</p>
+        </div>
+      </section>
+
+      <hr>
+
+      <section id="s0">
+        <div class="step-head">
+          <span class="step-num">STEP 0</span>
+          <div><h2>zip のブロックを解除する</h2><p class="sub">必ず最初に。これを飛ばすと次の手順でファイルが実行できません</p></div>
+        </div>
+        <ol>
+          <li>受け取った zip ファイルを<b>右クリック</b> → <b>プロパティ</b></li>
+          <li>「全般」タブの一番下に <b>「セキュリティ: このファイルは他のコンピューターから取得したものです」</b> という表示があれば、右側の <b>「許可する」にチェック</b>を入れる</li>
+          <li><b>OK</b> をクリック</li>
+        </ol>
+        <div class="note">
+          <span class="label">Note</span>
+          <p>この表示が出ない場合は、既に解除済みです。そのまま次へ進んでください。</p>
+        </div>
+      </section>
+
+      <section id="s1">
+        <div class="step-head">
+          <span class="step-num">STEP 1</span>
+          <div><h2>zip を展開する</h2><p class="sub">置き場所の選び方に注意</p></div>
+        </div>
+        <p>zip を右クリック →「すべて展開」で展開します。展開先は次のように選んでください。</p>
+        <div class="note warn">
+          <span class="label">展開先の初期値をそのまま使うと二重フォルダになります</span>
+          <p>「すべて展開」の画面に出る展開先は、初期値が <b>zip と同じ長い名前のフォルダ</b>（<code>…\AGS_HRMOS_AUTO_EVAL_20260826\</code>）になっています。そのままだとフォルダが入れ子になって分かりにくくなります。</p>
+          <p style="margin-bottom:0">入力欄を <code>C:\work</code> に書き換えてください。<code>C:\work\AGS_HRMOS_AUTO_EVAL\</code> ができます。</p>
+        </div>
+        <ul>
+          <li><b>おすすめ</b>：<code>C:\work\</code> の下など、<b>フォルダをたどる回数が少ない場所</b>。デスクトップの奥に置くと、あとでコマンドを打つときの文字列が長くなって扱いにくくなります</li>
+          <li><b>避けたい場所</b>：<b>OneDrive の中</b>（同期の途中でファイルが動かされ、動作が不安定になります。<b>会社のPCではデスクトップやドキュメントが OneDrive の中になっていることが多い</b>ので注意してください。エクスプローラーの左側で<b>雲のマーク</b>が付いている場所が同期対象です）／<b>ネットワークドライブ</b>（<code>Z:\</code> のような、他のPCにある場所）</li>
+        </ul>
+
+        <p>展開すると次のフォルダができます。<b>これ以降の説明はすべてこのフォルダが基準</b>です。</p>
+        <div class="blk screen"><p class="cap">&#9633; 展開後のフォルダの中身</p><pre><code>AGS_HRMOS_AUTO_EVAL\
+  ├── <span class="hi">run_scan.bat</span>          <span class="dim">← 毎回の実行に使います（STEP 4）</span>
+  ├── config.yaml            <span class="dim">← 設定ファイル（STEP 2 で自動的に作られます）</span>
+  ├── run.py
+  ├── setup\
+  │     ├── <span class="hi">install.bat</span>       <span class="dim">← 導入に使います（STEP 2）</span>
+  │     └── setup_scheduler.bat
+  └── data\                  <span class="dim">← 結果の保存先（実行すると自動でできます）</span>
+        └── reports\         <span class="dim">← Excel はここに出ます</span></code></pre></div>
+      </section>
+
+      <section id="s2">
+        <div class="step-head">
+          <span class="step-num">STEP 2</span>
+          <div><h2>install.bat を実行する</h2><p class="sub">ここが本体。途中で4〜5回、キーボード入力を求められます</p></div>
+        </div>
+        <p>展開したフォルダの中の <code>setup\install.bat</code> を<b>ダブルクリック</b>します。黒い画面が開き、順番に処理が進みます。</p>
+        <p><b>あなたが操作するのは下の (A)(B)(C) の3か所だけ</b>で、それ以外は自動で進みます。待っている間に画面が止まって見えても閉じないでください。</p>
+        <div class="tw">
+          <table>
+            <thead><tr><th>ステップ</th><th>内容</th><th>目安</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1/8</td><td>Python の確認（未導入なら自動インストール）</td><td class="num">〜5分</td></tr>
+              <tr><td class="num">2/8</td><td>仮想環境の作成</td><td class="num">数秒</td></tr>
+              <tr><td class="num">3/8</td><td>必要な部品のインストール</td><td class="num">1〜3分</td></tr>
+              <tr><td class="num">4/8</td><td>ブラウザ（Chromium）のインストール</td><td class="num">2〜5分</td></tr>
+              <tr><td class="num">5/8</td><td>設定ファイルの準備</td><td class="num">数秒</td></tr>
+              <tr><td class="num">6/8</td><td><b>ログイン情報とAPIキーの入力</b>（手を動かす場所）</td><td class="num">1分</td></tr>
+              <tr><td class="num">7/8</td><td>定期実行の登録（任意）</td><td class="num">数秒</td></tr>
+              <tr><td class="num">8/8</td><td>自己診断</td><td class="num">1分</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>途中で聞かれること（A）HRMOS のログイン情報</h3>
+<div class="blk ask"><p class="cap">&#10148; 画面に出る質問（答える）</p><pre><code>--- HRMOS採用のログイン情報 ---
+      メールアドレス: <span class="dim">← 入力して Enter</span>
+      パスワード:     <span class="dim">← 入力して Enter（画面には表示されません）</span></code></pre></div>
+        <div class="note">
+          <span class="label">Note</span>
+          <p>パスワードは入力しても画面に何も表示されませんが、<b>正常です</b>。そのまま入力して <span class="kbd">Enter</span> を押してください。</p>
+        </div>
+
+        <h3>（B）AI の選択</h3>
+<div class="blk ask"><p class="cap">&#10148; 画面に出る質問（答える）</p><pre><code>--- AI評価の設定 ---
+  どちらのAIで評価するかを選びます。評価の精度に大きな差はありません。
+
+    1) Gemini（APIキー）
+       ・費用: 使った分だけ（応募者1名あたり約0.8円）
+       ・必要: 会社のGoogleアカウントで発行したAPIキー（課金設定が有効なもの）
+       ・特徴: 追加ソフト不要。ブラウザでのログイン作業もなし
+
+    2) Claude（サブスクリプション）
+       ・費用: 契約済みのプランに含まれます（使った分の追加請求はありません）
+       ・必要: Claude の Pro / Max / Team / Enterprise 契約
+       ・特徴: Claude Code の導入と、初回に1度だけブラウザでのログインが必要
+       ・注意: 1つの契約を複数人で共有することは規約で禁止されています
+
+      番号を選んでください [1]:</code></pre></div>
+
+        <p><b>「どちらのAIを使うか決める」で選んだ方の番号</b>を入力して <span class="kbd">Enter</span> を押します。何も入力せずに <span class="kbd">Enter</span> を押すと 1（Gemini）が選ばれます。</p>
+
+        <h4 class="mini">1（Gemini）を選んだ場合</h4>
+        <p>APIキーの入力を求められるので、先ほどコピーしたキーを貼り付けます。</p>
+        <div class="note">
+          <span class="label">貼り付け方</span>
+          <p>コマンド画面への貼り付けは <b>右クリック</b> または <span class="kbd">Ctrl</span>+<span class="kbd">V</span> です。入力しても画面に表示されませんが正常です。</p>
+        </div>
+
+        <h4 class="mini">2（Claude）を選んだ場合</h4>
+        <p>Claude Code が入っていなければ<b>自動でインストール</b>されます。そのあとログイン状態が確認されます。</p>
+        <div class="note warn">
+          <span class="label">確認に30秒〜1分ほどかかります</span>
+          <p>Claude を選ぶと、ログイン状態を確かめるために実際に1回問い合わせます。その間<b>画面が止まって見えますが、待ってください</b>。</p>
+        </div>
+        <p><b>すでにログイン済みなら</b>、次のように表示されて完了です。追加の操作はありません。</p>
+<div class="blk screen"><p class="cap">&#9633; 画面に表示される内容（見るだけ）</p><pre><code>      <span class="ok">OK</span>   Claude Code: 2.1.220 (Claude Code)
+      <span class="ok">OK</span>   ログイン済みです。すぐに利用できます。</code></pre></div>
+        <p><b>まだログインしていない場合</b>は、次の案内が出ます。</p>
+<div class="blk screen"><p class="cap">&#9633; 画面に表示される内容（見るだけ）</p><pre><code>      注意 まだブラウザでのログインが済んでいません。次の操作が必要です。
+
+           1) スタートメニューから「コマンドプロンプト」を開く
+           2) 次の1行をそのままコピーして貼り付け、Enter を押す
+
+                "C:\Users\（あなた）\.local\bin\claude.exe"
+
+           3) 画面の案内に従い、ブラウザで Claude にログインする
+              （初回はテーマ選択などの質問が出ます。Enter で進めて構いません）
+           4) 終わったら exit と入力して閉じ、
+              setup\install.bat をもう一度ダブルクリックする</code></pre></div>
+        <div class="note good">
+          <span class="label">ログインは初回の1度だけ</span>
+          <p>一度ログインすれば以降は不要です。<b>評価の費用は契約中のプランに含まれ、追加請求はありません。</b></p>
+        </div>
+        <div class="note">
+          <span class="label">なぜ長いパスを貼り付けるのか</span>
+          <p>Claude Code を入れた直後は、<code>claude</code> という短い名前ではまだ見つからないことがあります。<b>画面に表示される実際のパスをそのままコピー</b>すれば確実です。</p>
+        </div>
+        <div class="note warn">
+          <span class="label">このあと診断は「NG」で終わります（失敗ではありません）</span>
+          <p>ログインが済んでいなくても、インストーラは止まらずに最後まで進みます。そのため次の STEP 3 で <code>[NG] AI評価の疎通 (claude)</code> と表示され、最後に黄色で<b>「セットアップは完了しましたが、未解決の項目があります」</b>と出ます。</p>
+          <p style="margin-bottom:0"><b>壊れてはいません。</b>上の 1)〜4) を済ませてから <code>setup\install.bat</code> をもう一度ダブルクリックすると <code>[OK]</code> に変わります。</p>
+        </div>
+
+        <h3>（C）定期実行の登録</h3>
+<div class="blk ask"><p class="cap">&#10148; 画面に出る質問（答える）</p><pre><code>      平日 12:30 / 17:30 の自動実行を登録しますか？ (y/N):</code></pre></div>
+        <p><b>平日</b>の 12:30 と 17:30 に自動実行したい場合は <code>y</code>、自分でそのつど実行したい場合はそのまま <span class="kbd">Enter</span>。土日は実行されません。後から <code>setup\setup_scheduler.bat</code> でいつでも登録できます。</p>
+      </section>
+
+      <section id="s3">
+        <div class="step-head">
+          <span class="step-num">STEP 3</span>
+          <div><h2>診断結果を確認する</h2><p class="sub">全項目 OK なら完了</p></div>
+        </div>
+<div class="blk screen"><p class="cap">&#9633; 画面に表示される内容（見るだけ）</p><pre><code>  [<span class="ok">OK  </span>] Python 3.13.1               ...
+  [<span class="ok">OK  </span>] 仮想環境 (.venv)            ...
+  [<span class="ok">OK  </span>] 依存パッケージ              6件すべて導入済み
+  [<span class="ok">OK  </span>] Chromium ブラウザ           ...
+  [<span class="ok">OK  </span>] 設定ファイル                config.yaml / 評価基準 7項目
+  [<span class="ok">OK  </span>] HRMOS認証情報               yam***@example.com (環境変数から取得)
+  [<span class="ok">OK  </span>] データディレクトリ          書き込み可能
+  [<span class="ok">OK  </span>] メール通知                  無効 (enabled: false) — 任意機能のため問題ありません
+  [<span class="ok">OK  </span>] AI評価の疎通 (gemini_api)   応答を受信 ※APIキーの課金が有効か確認してください
+
+  すべて正常です。run_scan.bat で実行できます。</code></pre></div>
+        <p><code>NG</code> が出た場合は、その行に対処方法が書かれています。<a href="#trouble">「困ったとき」</a>も参照してください。</p>
+        <p>行末の <code>※</code> から始まる注意書きは、<b>課金設定を済ませていても毎回表示されます</b>。行頭が <code>[OK]</code> であれば問題ありません。</p>
+        <p><b>Claude を選んだ場合、1回目は <code>AI評価の疎通 (claude)</code> が <code>NG</code> になることがあります。</b>STEP 2 のログイン手順（1)〜4)）を済ませてから <code>setup\install.bat</code> をもう一度ダブルクリックしてください。</p>
+      </section>
+
+      <section id="s4">
+        <div class="step-head">
+          <span class="step-num">STEP 4</span>
+          <div><h2>実行する</h2><p class="sub">ダブルクリックして、終わるまで待つ</p></div>
+        </div>
+        <p>フォルダ直下の <code>run_scan.bat</code> をダブルクリックします。書類のダウンロード → AI評価 → Excel出力までが自動で行われます。</p>
+
+        <div class="blk screen"><p class="cap">&#9633; 実行中の画面（見るだけ）</p><pre><code>============================================================
+  HRMOS - scanning for new applicants
+============================================================
+
+  This takes several minutes. Do NOT close this window.
+  Progress is written to:
+    C:\work\AGS_HRMOS_AUTO_EVAL\data\logs\scan_20260825_143000.log</code></pre></div>
+
+        <div class="note warn">
+          <span class="label">画面が止まって見えても、閉じないでください</span>
+          <p>この後、<b>数分から十数分</b>のあいだ画面に何も出ません。処理は裏で進んでいます。新しい応募者が多いほど長くかかります（1人あたり十数秒 &times; 人数）。</p>
+          <p style="margin-bottom:0"><b>間違えて閉じてしまっても壊れません。</b>そこまでに評価が終わった人の結果は保存され、残りは次回の実行に持ち越されます（ただしその回の Excel は作られません）。</p>
+        </div>
+
+        <p>終わると次のように表示され、<b>キーを押すまで画面が残ります</b>。</p>
+        <div class="blk screen"><p class="cap">&#9633; 終わったときの画面（見るだけ）</p><pre><code>  <span class="ok">Done. Reports are in:</span>
+    C:\work\AGS_HRMOS_AUTO_EVAL\data\reports
+
+続行するには何かキーを押してください . . .</code></pre></div>
+
+        <p>結果は <code>data\reports\</code> フォルダに Excel ファイル（<code>ai_evaluation_日付.xlsx</code>）として出力されます。</p>
+
+        <div class="note">
+          <span class="label">画面は英語ですが問題ありません</span>
+          <p>この画面はタスクスケジューラからの自動実行でも使う共通のものなので、英語のままにしています。<b>Done</b> と出れば成功、<b>ERROR</b> と出れば失敗です。失敗のときは表示されたログファイルの場所を管理者に伝えてください。</p>
+        </div>
+
+        <div class="note good">
+          <span class="label">新しい応募者がいないとき</span>
+          <p>すぐに終わり、Excel は作られません。<b>異常ではありません</b>。このツールは前回から増えた人だけを処理します。</p>
+        </div>
+      </section>
+
+      <hr>
+
+      <div class="note danger" style="margin-bottom:34px">
+        <span class="label">使い始める前に — これだけは</span>
+        <p><b>AI の点数だけで合否を決めないでください。</b>最終判断は必ず人が、元の書類を見たうえで行ってください（利用規約上の要件です）。</p>
+        <p style="margin-bottom:0">出力される Excel と <code>data\downloads\</code> の書類は<b>応募者の個人情報</b>です。社内のルールに従って管理してください。詳しくは<a href="#ops">運用上の注意</a>を参照。</p>
+      </div>
+
+      <section id="advanced">
+        <h2>評価の内容を自分で変えたい場合</h2>
+        <p>
+          評価する項目、面接質問の観点、1次通過候補の判定ラインは、<b>すべて後から変更できます</b>。
+          プログラムの知識は要りません。設定ファイルをメモ帳で編集するだけです。
+        </p>
+        <div class="note">
+          <span class="label">別ガイドにまとめています</span>
+          <p style="margin-bottom:14px">
+            編集のしかた、失敗しないための3つのルール、変更したあとに必要な操作、
+            壊してしまったときの直し方までを説明しています。
+          </p>
+          <p style="margin-bottom:0">
+            <a href="SETUP_GUIDE.ADVANCED.html"><b>設定ガイド（応用編）&mdash; 評価基準を自分で変える &rarr;</b></a>
+          </p>
+        </div>
+        <p class="muted">
+          既定の評価項目のまま使う場合、この作業は必要ありません。
+        </p>
+      </section>
+
+      <hr>
+
+      <section id="mail">
+        <h2>任意 — メール通知を有効にする</h2>
+        <p class="muted">この設定は<b>しなくても構いません</b>。ツールは通常どおり動き、結果は Excel に出力されます。</p>
+
+        <p>
+          有効にすると、評価が終わるたびに<b>結果のサマリと Excel が添付されたメール</b>が届きます。
+          毎回フォルダを開いて確認しなくてよくなるほか、<b>失敗したときにも通知が届く</b>ので、
+          自動実行にしている場合の「動いていたつもりで止まっていた」を防げます。
+        </p>
+
+        <div class="note">
+          <span class="label">診断画面に「メール通知 無効」と出るのは正常です</span>
+          <p>導入直後はこの機能がオフになっています。<code>[OK] メール通知 無効 (enabled: false)</code> と表示されますが、<b>異常ではありません</b>。使わない場合はそのままで問題ありません。</p>
+        </div>
+
+        <h3>送られてくるメールの種類</h3>
+        <p>いずれの場合も<b>必ず何かが届く</b>ため、「メールが来ない＝何かおかしい」と判断できます。<span class="muted">（ただし設定した直後に一度も届かないときは、ツールではなく<b>宛先の設定</b>が原因のことがあります。下の注意を参照）</span></p>
+        <div class="tw">
+          <table>
+            <thead><tr><th>種類</th><th>届くとき</th></tr></thead>
+            <tbody>
+              <tr><td><b>評価結果メール</b></td><td>新規の応募者を1名以上評価できたとき（サマリ表＋Excel添付）</td></tr>
+              <tr><td><b>「新規なし」通知</b></td><td>新規の応募者が0名で正常に終わったとき</td></tr>
+              <tr><td><b>失敗アラート</b></td><td>ログインに失敗した・一覧が取れなかった・評価が全件失敗したとき</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>設定のしかた</h3>
+        <ol>
+          <li>
+            <a href="https://resend.com">resend.com</a> でアカウントを作成し、<b>APIキー</b>を取得する
+            <br><span class="muted">Resend はメール送信サービスです。無料枠があり、社内の SMTP 設定は不要です。</span>
+          </li>
+          <li>
+            APIキーを Windows のユーザー環境変数 <code>RESEND_API_KEY</code> に設定する
+<p class="muted">（打ち方は<a href="#howto-cmd">こちら</a>）</p>
+        <div class="blk type"><p class="cap">&#9654; 入力するコマンド</p><pre><code>setx RESEND_API_KEY "re_xxxxxxxxxxxx"</code></pre></div>
+            <span class="muted">設定後は<b>新しい画面を開いてから</b>実行してください（既存の画面には反映されません）。</span>
+          </li>
+          <li>
+            ツールのフォルダにある <code>config.yaml</code> をメモ帳で開き、<code>email:</code> の部分を編集する
+<div class="blk edit"><p class="cap">&#9998; config.yaml の編集箇所</p><pre><code>email:
+  enabled: true                  <span class="dim">← false から true に変える</span>
+  from: "onboarding@resend.dev"  <span class="dim">← 変更しないでください</span>
+  to:
+    - "宛先@example.com"         <span class="dim">← 受け取りたいアドレス</span>
+  subject_prefix: "[HRMOS]"
+  attach_resumes: true
+  notify_on_no_candidates: true</code></pre></div>
+          </li>
+          <li>
+            設定できたか確認する（打ち方は<a href="#howto-cmd">こちら</a>）
+<div class="blk type"><p class="cap">&#9654; 入力するコマンド</p><pre><code>.venv\Scripts\python.exe run.py doctor</code></pre></div>
+            <span class="muted"><code>[OK] メール通知　有効 / 宛先 1件</code> と出れば完了です。</span>
+          </li>
+        </ol>
+
+        <div class="note danger">
+          <span class="label">まず「自分のアドレス」だけで試してください</span>
+          <p><code>from</code>（差出人）は Resend が用意しているお試し用のアドレスです。このままだと <b>Resend に登録したご本人のアドレス宛にしか届きません</b>。部署の共有アドレスや上司を宛先に足すのは、<b>自分のアドレスで届くことを確認してから</b>にしてください。</p>
+          <p style="margin-bottom:0">共有アドレスにも送るには、Resend 側で自社ドメインを登録する作業（DNSの設定）が必要です。<b><code>from</code> を自社のアドレスに書き換えるだけでは送れません</b>（書き換えると、それまで届いていた分も止まります）。</p>
+        </div>
+
+        <div class="note warn">
+          <span class="label">config.yaml を編集するときの注意</span>
+          <p><b>行頭の空白（インデント）を変えないでください。</b>YAML という形式は字下げで構造を表すため、ずれると読み込めなくなります。日本語入力のまま全角スペースを打ってしまうのもよくある失敗です。</p>
+          <p>壊してしまった場合は <code>doctor</code> が「YAMLとして読めません」と教えてくれます。<code>config.yaml.example</code> をコピーして作り直せば元に戻せます。</p>
+        </div>
+
+        <div class="note danger">
+          <span class="label">経歴書の添付について</span>
+          <p><code>attach_resumes: true</code> にすると、<b>1次通過候補（○）の応募者の経歴書がメールに添付</b>されます。この添付ファイルは<b>伏字にしていない個人情報をそのまま含みます</b>（ツールがAIに送るときだけ伏字にしており、原本には手を加えないため）。</p>
+          <p>社内の個人情報の取り扱いルールを確認したうえで判断してください。添付が不要なら <code>attach_resumes: false</code> にします。</p>
+        </div>
+      </section>
+
+      <section id="msg">
+        <h2>途中で出るかもしれないメッセージ</h2>
+
+        <h3>「新しい画面で開き直してください」と表示された</h3>
+        <div class="note good">
+          <span class="label">異常ではありません</span>
+          <p>Python を新しく入れた直後に必ず起きます。設定の変更は<b>新しく開いた画面にしか反映されない</b>ためです。画面を閉じて <code>setup\install.bat</code> をもう一度ダブルクリックしてください。2回目は Python のインストールが飛ばされるので早く終わります。</p>
+          <p style="margin-bottom:0"><b>2回目は、入力済みの項目ごとに「変更しますか？ 変更しない場合はそのまま Enter (y=変更)」と聞かれます。そのまま Enter を押せば前回の入力がそのまま使われます。</b></p>
+        </div>
+
+        <h3>最後に英語で「Some checks did not pass...」と出た</h3>
+        <div class="note good">
+          <span class="label">新しいエラーではありません</span>
+          <p>「やり残しがあります。直してから install.bat をもう一度実行してください」という意味で、<b>その上に日本語で出ている案内と同じこと</b>を言っています。</p>
+          <p>画面を上にスクロールして、赤い<b>「セットアップを中断しました」</b>または <code>[NG]</code> で始まる行を探してください。</p>
+          <p style="margin-bottom:0"><b>どちらも見当たらない場合</b>は、上の日本語の案内どおりに画面を閉じて <code>setup\install.bat</code> をもう一度ダブルクリックすれば進みます（<code>[NG]</code> の行は診断まで進んだときだけ出るため、途中で止まった回には存在しません）。</p>
+        </div>
+
+        <h3>「WindowsによってPCが保護されました」と出た</h3>
+        <p>STEP 0 のブロック解除を飛ばした場合に出ます。「詳細情報」をクリック →「実行」で進めます。または、いったん削除して STEP 0 からやり直してください。</p>
+
+        <h3>黒い画面がすぐ閉じてしまう</h3>
+        <p><code>setup\install.bat</code> は「管理者として実行」ではなく、<b>通常のダブルクリック</b>で開いてください。それでも閉じる場合は、<code>install.ps1</code> が <code>setup</code> フォルダ内にあるか確認してください（zip の展開漏れ）。</p>
+      </section>
+
+      <section id="trouble">
+        <h2>困ったとき</h2>
+        <p>問題が起きたら、まず自己診断を実行してください。どこでつまずいているかが1回のコマンドで分かります。</p>
+
+        <h3 id="howto-cmd">コマンドの打ち方（この文書で共通）</h3>
+        <p>この先に出てくるコマンドは、すべて次の手順で打ちます。<b>1回覚えれば以降は同じ</b>です。</p>
+        <ol>
+          <li><b>ツールのフォルダをエクスプローラーで開く</b>（<code>run_scan.bat</code> が見えている状態）</li>
+          <li>フォルダ上部の<b>アドレス欄</b>（<code>C:\work\…</code> と表示されている場所）を<b>クリック</b>して、文字が選択された状態にする</li>
+          <li>そのまま <code>cmd</code> と打ち込んで <span class="kbd">Enter</span> を押す<br><span class="muted">→ そのフォルダを開いた状態で黒い画面が立ち上がります</span></li>
+          <li>コマンドを<b>右クリックで貼り付け</b>て <span class="kbd">Enter</span></li>
+        </ol>
+        <div class="note good">
+          <span class="label">この方法なら「フォルダの移動」が要りません</span>
+          <p>スタートメニューからコマンドプロンプトを開くと別の場所が開いてしまい、<code>cd</code> というコマンドで移動する必要があります。上のやり方なら最初から正しい場所で開きます。</p>
+        </div>
+
+        <h3>自己診断を実行する</h3>
+<div class="blk type"><p class="cap">&#9654; 入力するコマンド</p><pre><code>.venv\Scripts\python.exe run.py doctor
+
+<span class="dim"># APIの費用を使わずに確認する場合</span>
+.venv\Scripts\python.exe run.py doctor --skip-llm</code></pre></div>
+
+        <div class="tw">
+          <table>
+            <thead><tr><th>症状</th><th>原因と対処</th></tr></thead>
+            <tbody>
+              <tr><td><code>[NG] HRMOS認証情報 未設定です</code></td><td><code>setup\install.bat</code> をもう一度実行して入力し直す</td></tr>
+              <tr><td><code>[NG] AI評価の疎通 (claude)</code></td><td>Claude のブラウザログインが終わっていません。STEP 2 の「2（Claude）を選んだ場合」の 1)〜4) を実行し、<code>setup\install.bat</code> をもう一度ダブルクリックしてください</td></tr>
+              <tr><td><code>[NG] AI評価の疎通 … HTTP 400 / 403</code></td><td>APIキーが誤っているか無効。AI Studio でキーを作り直す</td></tr>
+              <tr><td><code>[NG] … APIキーが設定されていません</code></td><td><b>新しい画面</b>を開いて再試行（設定は既存の画面に反映されない）</td></tr>
+              <tr><td><code>[NG] Chromium ブラウザ</code></td><td><code>.venv\Scripts\python.exe -m playwright install chromium</code> を実行（<a href="#howto-cmd">打ち方</a>）</td></tr>
+              <tr><td>ログインに失敗する</td><td>HRMOS のパスワード変更・アカウントロックを確認。ツールのフォルダ直下にある <code>storage_state.json</code>（HRMOSへのログイン状態を覚えておくファイル）を削除して <code>run_scan.bat</code> をもう一度実行。<b>消しても問題ありません</b>（次回の実行で作り直されます）</td></tr>
+              <tr><td>「応募者一覧の取得0件」のメールが届く</td><td>セッション切れが主因。多くは次回実行で自動復旧。続く場合は <code>storage_state.json</code> を削除</td></tr>
+              <tr><td>メール通知を設定したのに<b>1通も届かない</b></td><td><code>to:</code> が <b>Resend に登録した自分のアドレス</b>か確認してください。診断は宛先の中身まで見ないため、届かなくても <code>[OK] メール通知</code> と表示されます。実際に送れたかは <code>data\logs\scan_日付.log</code> に記録されます</td></tr>
+              <tr><td>定期実行された形跡がない</td><td>PCがスリープしていた可能性。ログが無い＝失敗ではなく<b>未起動</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>ログの場所</h3>
+        <div class="tw">
+          <table>
+            <thead><tr><th>種類</th><th>場所</th></tr></thead>
+            <tbody>
+              <tr><td>インストール時のログ</td><td><code>data\logs\install_YYYYMMDD_HHMMSS.log</code></td></tr>
+              <tr><td>実行時のログ</td><td><code>data\logs\scan_YYYYMMDD_HHMMSS.log</code></td></tr>
+              <tr><td>異常時の画面キャプチャ</td><td><code>data\debug\</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>問い合わせるときは、該当するログファイルを添付してください。</p>
+      </section>
+
+      <section id="ops">
+        <h2>運用上の注意</h2>
+        <div class="note warn">
+          <span class="label">個人情報の取り扱い</span>
+          <p>出力された Excel と <code>data\downloads\</code> の書類は、社内の個人情報取扱いルールに従って管理してください。</p>
+        </div>
+        <div class="note danger">
+          <span class="label">AI の点数だけで合否を決めないでください</span>
+          <p><b>AI の出力は「下読み」です。</b>最終判断は採用の担当者が<b>元の書類を見たうえで</b>行ってください。</p>
+          <p>これは心がけではなく、<b>AI提供各社の利用規約が定める要件</b>です。採用選考は「高リスク用途」に分類され、結果を使う前に有資格者が内容を確認することが条件になっています。</p>
+          <p style="margin-bottom:0"><b>「○が付いた人だけ書類を読む」という運用も避けてください。</b>○が付かなかった人を、人が見ないまま落としていることになります。</p>
+        </div>
+        <div class="note warn">
+          <span class="label">APIキーは他人に渡さない</span>
+          <p>使用量がそのまま会社の請求に乗ります。</p>
+        </div>
+        <div class="note warn">
+          <span class="label">AI Studio の画面に書類を直接貼らない</span>
+          <p>このツールは送信前に氏名・電話番号・住所を伏字にしていますが、手作業で貼るとその処理が働きません。</p>
+        </div>
+
+        <h3>アンインストール</h3>
+        <ol>
+          <li>定期実行を解除する（登録した場合）
+<p class="muted">（打ち方は<a href="#howto-cmd">こちら</a>）</p>
+        <div class="blk type"><p class="cap">&#9654; 入力するコマンド</p><pre><code>powershell -ExecutionPolicy Bypass -File setup\setup_scheduler.ps1 -Unregister</code></pre></div></li>
+          <li>ツールのフォルダごと削除する</li>
+          <li>環境変数を削除する（Windows の設定 →「環境変数を編集」）<br>
+            <code>HRMOS_EMAIL</code> / <code>HRMOS_PASSWORD</code> / <code>GEMINI_API_KEY</code>（メール通知を設定した場合は <code>RESEND_API_KEY</code> も）</li>
+        </ol>
+        <p>Python 本体は他のソフトが使っている可能性があるため、通常は残して構いません。</p>
+      </section>
+
+      <footer>
+        <p>HRMOS採用 応募者書類AI評価ツール — 導入ガイド。<br>Gemini を選んだ場合のモデルは <code>gemini-3.5-flash-lite</code>（評価1件あたり約0.8円）。Claude を選んだ場合は契約中のプランに含まれます。このツールで何ができるか・どう動いているかは同梱の <a href="OVERVIEW.html">OVERVIEW.html</a>、評価基準の変更は <code>SETUP_GUIDE.ADVANCED.html</code>、設定項目の全一覧は <code>config.yaml.example</code> のコメントを参照してください。</p>
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('tg');
+  var root = document.documentElement;
+  try {
+    var saved = localStorage.getItem('guide-theme');
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  btn.addEventListener('click', function () {
+    var cur = root.getAttribute('data-theme');
+    if (!cur) {
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      cur = prefersDark ? 'dark' : 'light';
+    }
+    var next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('guide-theme', next); } catch (e) {}
+  });
+})();
+</script>

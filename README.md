@@ -1,11 +1,21 @@
 # HRMOS採用 応募者書類AI評価ツール
 
-HRMOS採用ページをクローリングし、応募者一覧から履歴書等の書類（PDF/Word/Excel）を自動ダウンロードし、Claude AIが評価基準に基づいて各応募者を自動評価・スコアリングし、面接質問候補とともにExcelレポートを出力するCLIツールです。
+HRMOS採用ページをクローリングし、応募者一覧から履歴書等の書類（PDF/Word/Excel）を自動ダウンロードし、AI が評価基準に基づいて各応募者を自動評価・スコアリングし、面接質問候補とともにExcelレポートを出力するCLIツールです。
+
+> **このファイルは開発者向けです。配布物には含まれません。**
+> 利用者向けの説明は `setup/` の3つのHTMLが正です。
+>
+> | ファイル | 内容 |
+> |---|---|
+> | [setup/SETUP_GUIDE.html](setup/SETUP_GUIDE.html) | 導入手順（受け取った人が読む） |
+> | [setup/SETUP_GUIDE.ADVANCED.html](setup/SETUP_GUIDE.ADVANCED.html) | 評価基準などの設定変更 |
+> | [setup/OVERVIEW.html](setup/OVERVIEW.html) | 機能とアーキテクチャの解説 |
+> | [setup/DISTRIBUTION.md](setup/DISTRIBUTION.md) | 配る側の手順 |
 
 ## 主な機能
 
 - 応募者書類の自動ダウンロード（PDF/Word/Excel対応）
-- Claude CLI / Gemini CLIによるAI自動評価（設定した評価基準に基づく1〜5点のスコアリング、configで切替可能）
+- Gemini API / Claude CLI によるAI自動評価（設定した評価基準に基づく1〜5点のスコアリング、configで切替可能）
 - 面接質問候補の自動生成（応募者ごとに3問）
 - Excel一覧表の自動出力（レーダーチャート・1次通過候補・備考欄付き）
 - メール通知（Resend API、オプション。評価内訳付きサマリ・○のHRMOSリンク・1次通過候補の経歴書添付。加えて新規0件時の「新規なし」通知・スキャン失敗時のアラートで無音による見逃しを防止）
@@ -14,99 +24,106 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 ## 動作環境
 
 - **OS**: Windows 10/11
-- **Python**: 3.10 以上
+- **Python**: 3.10 以上（未導入なら `install.bat` が 3.13 を自動インストール）
 - **ブラウザ**: Chromium（Playwrightが自動インストール）
-- **Gemini CLI**: `config.yaml.example` の初期値は `gemini` のため、既定ではこちらが必要（`npm install -g @google/gemini-cli`）
-- **Claude CLI**: `evaluation.provider` を `"claude"` に変更する場合に必要（claude.aiライセンス使用）
+- **AI**: 以下のいずれか
+  - **Gemini API キー**（推奨 / `provider: "gemini_api"`）: CLI・Node.js・ブラウザログインが不要。[Google AI Studio](https://aistudio.google.com/apikey) でキーを発行する
+  - **Claude Code**（`provider: "claude"`）: Pro / Max / Team / Enterprise / Console のいずれかの契約と、初回のブラウザ認証が必要
+
+> **注意**: Gemini CLI（`provider: "gemini"`）は 2026-06-18 に個人アカウント向けの提供が終了したため、通常は動作しません。Gemini を使う場合は APIキー認証の `gemini_api` を選んでください。
+>
+> Gemini API の**無料枠は入力内容が製品改善に利用される規約**です。応募者の書類を扱うため、**課金を有効にしたプロジェクトのキー**を使用してください。
+>
+> **Google Workspace のライセンスでは Gemini API を利用できません。** Workspace に含まれるのは Gmail・ドキュメント等の画面内 Gemini のみで、API の利用枠は別契約です。API の階層は Google Cloud の請求先アカウントの有無だけで決まるため、**Workspace とは別に課金設定（カード登録）が必要**です。
+
+## 導入に必要な準備（利用者側）
+
+インストーラを実行する前に、以下を手元に用意してください。
+
+| # | 準備するもの | 補足 |
+|---|---|---|
+| 1 | HRMOS採用のログインID / パスワード | インストーラが対話形式で聞きます |
+| 2 | Gemini API キー **または** Claude の有料契約 | Gemini の場合は [AI Studio](https://aistudio.google.com/apikey) で発行（課金有効なプロジェクトのキー） |
+| 3 | Resend APIキー（任意） | メール通知を使う場合のみ |
+| 4 | インターネット接続 | 社内プロキシがある場合は `HTTPS_PROXY` の設定値 |
+
+管理者権限は不要です（Python もツール本体もユーザースコープに入ります）。
 
 ## セットアップ手順
 
 ### かんたんセットアップ（推奨）
 
-配布された zip を任意の場所に展開し、`setup.bat` をダブルクリックするだけです。
+**Step 0**: 受け取った zip を**右クリック → プロパティ → 「セキュリティ」欄の「許可する」にチェック → OK**。
+これを行わないと、展開後の `install.bat` が Windows のセキュリティ警告でブロックされます。
 
-1. zip を任意のフォルダに展開
-2. `setup.bat` をダブルクリック（Python確認・仮想環境・依存パッケージ・Chromium を自動セットアップ）
-3. `config.yaml` をテキストエディタで開き、HRMOSのログイン情報を入力
-4. `run_scan.bat` をダブルクリックで実行
+**Step 1**: zip を任意のフォルダに展開します。
 
-> **前提条件**:
-> - Python 3.10 以上がインストール済みであること（未インストールの場合、setup.bat が案内を表示します）
-> - Gemini CLI がインストール済みであること（`npm install -g @google/gemini-cli`）
+**Step 2**: `setup\install.bat` をダブルクリックします。以下が自動で実行されます。
+
+1. Python の確認（未導入なら winget または python.org から 3.13 を自動インストール）
+2. 仮想環境 `.venv` の作成
+3. 依存パッケージのインストール
+4. Chromium のインストール
+5. `config.yaml` の作成
+6. **HRMOSのログイン情報・AIの設定を対話形式で入力**（Windowsのユーザー環境変数に保存）
+7. 定期実行（平日 12:30 / 17:30）の登録（任意）
+8. **自己診断** — 実際にAIへ1回リクエストを送り、動く状態かを確認
+
+**Step 3**: 診断がすべて `OK` になれば完了です。`run_scan.bat` をダブルクリックで実行できます。
+
+> Python を新規インストールした直後は「新しい画面で開き直してください」と表示されることがあります。異常ではありません（PATH の変更は新しく開いたウィンドウにしか反映されないため）。案内どおり `setup\install.bat` をもう一度実行してください。
+
+### 導入後の確認・トラブル切り分け
+
+いつでも次のコマンドで環境を再診断できます。
+
+```powershell
+.venv\Scripts\python.exe run.py doctor
+
+# AIへのリクエストを送らずに確認する（APIコストを消費しない）
+.venv\Scripts\python.exe run.py doctor --skip-llm
+```
+
+Python・仮想環境・依存パッケージ・Chromium・設定ファイル・認証情報・データフォルダ・メール通知・**AI評価の疎通**を1項目ずつ判定し、`NG` の行に対処方法を表示します。
+
+### 認証情報の保存場所
+
+`setup\install.bat` で入力した認証情報は **config.yaml ではなく Windows のユーザー環境変数**に保存されます（`HRMOS_EMAIL` / `HRMOS_PASSWORD` / `GEMINI_API_KEY`）。フォルダごとコピーしても認証情報が一緒に持ち出されないようにするためです。
+
+手動で設定する場合:
+
+```powershell
+[Environment]::SetEnvironmentVariable('HRMOS_EMAIL', 'your-email@example.com', 'User')
+[Environment]::SetEnvironmentVariable('HRMOS_PASSWORD', 'your-password', 'User')
+[Environment]::SetEnvironmentVariable('GEMINI_API_KEY', 'AIza...', 'User')
+[Environment]::SetEnvironmentVariable('RESEND_API_KEY', 're_xxxxx', 'User')
+```
+
+> 設定後は**新しいウィンドウを開いてから**実行してください（既存のウィンドウには反映されません）。
 
 ### 手動セットアップ
 
-setup.bat を使わずに手動でセットアップする場合は、以下の手順に従ってください。
+`setup\install.bat` を使わない場合は以下の手順です。
 
-#### 1. ソースコードの取得
-
-配布された zip を任意の場所に展開します。
-
-#### 2. Python仮想環境の作成・有効化
-
-```bash
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
-```
-
-#### 3. 依存パッケージのインストール
-
-```bash
-pip install -r requirements.txt
-```
-
-#### 4. Playwrightブラウザのインストール
-
-```bash
-playwright install chromium
-```
-
-#### 5. Gemini CLIの確認
-
-デフォルトではGemini CLIを使用します。ターミナルから `gemini` コマンドが実行できることを確認してください。
-
-```bash
-gemini --version
-```
-
-未インストールの場合:
-
-```bash
-npm install -g @google/gemini-cli
-```
-
-Claude CLIを使用する場合は、`config.yaml` の `evaluation.provider` を `"claude"` に変更してください。
-
-#### 6. 設定ファイルの作成
-
-`config.yaml.example` をコピーして `config.yaml` を作成し、各項目を編集します。
-
-```bash
+.venv\Scripts\pip.exe install -r requirements.txt
+.venv\Scripts\python.exe -m playwright install chromium
 copy config.yaml.example config.yaml
+.venv\Scripts\python.exe run.py doctor
 ```
 
-`config.yaml` を開いて以下を設定してください。
+`config.yaml` を開いて `evaluation.provider`（`gemini_api` / `claude`）と `evaluation_criteria` を設定し、認証情報は上記の環境変数で指定します。
 
-```yaml
-# HRMOS採用のログイン情報
-credentials:
-  email: "your-email@example.com"
-  password: "your-password"
+## 配布パッケージの作成（配る側）
 
-# AI評価基準（項目名と説明を自由に追加・変更可）
-evaluation_criteria:
-  - name: "技術スキル"
-    description: "プログラミング言語（Python, JavaScript等）、AI/ML、クラウド（AWS, GCP等）の技術経験と深さ"
-  # ... 必要に応じて追加・変更
+```powershell
+powershell -ExecutionPolicy Bypass -File setup\build_dist.ps1
 ```
 
-> **補足**: 認証情報・APIキーは環境変数でも指定できます。
->
-> ```bash
-> set HRMOS_EMAIL=your-email@example.com
-> set HRMOS_PASSWORD=your-password
-> set RESEND_API_KEY=re_xxxxx
-> ```
+`dist/AGS_HRMOS_AUTO_EVAL_YYYYMMDD.zip` が生成されます。Git 管理下のファイルを基準に組み立て、`config.yaml` / `storage_state.json` / `data/` などの機密・実行時生成物は自動で除外します。配布に必要なファイルが欠けている場合はエラーで停止します。
+
+> 配布先には「zip を展開する前に、右クリック → プロパティ → 『許可する』にチェック」を必ず伝えてください。
 
 ## 使い方
 
@@ -200,13 +217,19 @@ email:
 
 ## タスクスケジューラ（自動実行）
 
-`setup_scheduler.bat` を管理者権限で実行すると、平日 12:30 と 17:30 に `run_scan.bat` を実行するタスクが登録されます（タスク名: `HRMOS_AutoEval_1230` / `HRMOS_AutoEval_1730`）。実行ログは `data/logs/scan_YYYYMMDD_HHMM.log` に残ります。
+`setup\setup_scheduler.bat` を実行すると、平日 12:30 と 17:30 に `run_scan.bat` を実行するタスクが登録されます。`setup\install.bat` の途中でも登録できます。実行ログは `data/logs/scan_YYYYMMDD_HHMMSS.log` に残ります。
+
+- **管理者権限は不要**です（ログオン中の自分のユーザーとして実行されます）
+- タスク名はフォルダ名を接尾辞に含みます（例: `HRMOS_AutoEval_1230_AGS_HRMOS_AUTO_EVAL`）。同じPCに複数フォルダで導入しても衝突しません
+- **スリープ対策（`StartWhenAvailable` / `WakeToRun` / バッテリー条件）は登録時に自動で設定されます**。以前の `schtasks` 版と違い、再登録しても設定は失われません
 
 ### 登録
 
 ```powershell
-# 管理者権限で実行
-setup_scheduler.bat
+setup\setup_scheduler.bat
+
+# 解除
+powershell -ExecutionPolicy Bypass -File setup\setup_scheduler.ps1 -Unregister
 ```
 
 ### 管理
@@ -254,16 +277,26 @@ foreach ($n in 'HRMOS_AutoEval_1230','HRMOS_AutoEval_1730') {
 ```
 AGS_HRMOS_AUTO_EVAL/
 ├── run.py                  # CLIエントリーポイント
-├── setup.bat               # 初回セットアップ（venv・依存パッケージ・Chromium）
-├── run_scan.bat            # scan 実行（ログを data/logs/ に出力）
-├── setup_scheduler.bat     # タスクスケジューラ登録（平日 12:30 / 17:30）
+├── run_scan.bat            # scan 実行（引数 scheduled で無人モード）
+├── はじめにお読みください.txt  # 配布物の道しるべ（SETUP_GUIDE.html へ誘導）
+├── setup/                  # 導入・配布に関するもの一式
+│   ├── install.bat         # インストーラ起動用（ASCII・install.ps1 を呼ぶだけ）
+│   ├── install.ps1         # インストーラ本体（Python導入〜設定〜自己診断）
+│   ├── setup_scheduler.bat # 定期実行の登録（起動用）
+│   ├── setup_scheduler.ps1 # 定期実行の登録本体（スリープ対策込み）
+│   ├── build_dist.ps1      # 配布用zipの作成（機密除外・入れ忘れ検知・head付与）
+│   ├── SETUP_GUIDE.html         # 導入手順書（配布zipに同梱）
+│   ├── SETUP_GUIDE.ADVANCED.html # 設定変更ガイド（配布zipに同梱）
+│   ├── OVERVIEW.html            # 機能とアーキテクチャの解説（配布zipに同梱）
+│   ├── DISTRIBUTION.md          # 配る側の手順書（配布zipには含めない）
+│   └── AGS_HRMOS_AUTO_EVAL_*.zip # 生成物（.gitignore 対象）
 ├── config.yaml.example     # 設定ファイルのテンプレート
 ├── requirements.txt        # Python依存パッケージ
 ├── ROADMAP.md              # 未対応タスク一覧
-├── Architecture.md         # アーキテクチャ解説
 ├── src/
 │   ├── main.py             # メインオーケストレーター
 │   ├── config.py           # 設定管理（YAML + 環境変数）
+│   ├── doctor.py           # 環境自己診断（run.py doctor）
 │   ├── browser/
 │   │   ├── auth.py         # HRMOS認証（2段階ログイン・セッション有効性判定）
 │   │   ├── navigator.py    # 応募者一覧巡回・ダウンロード
@@ -272,9 +305,10 @@ AGS_HRMOS_AUTO_EVAL/
 │   ├── parser/
 │   │   └── document.py     # PDF/Word/Excelテキスト抽出
 │   ├── evaluator/
-│   │   ├── llm_client.py        # LLMプロバイダー切替（Claude/Gemini）
+│   │   ├── llm_client.py        # LLMプロバイダー切替（Claude/Gemini API/Gemini CLI）
 │   │   ├── claude_client.py     # Claude CLI呼び出し（リトライ付き）
-│   │   ├── gemini_client.py     # Gemini CLI呼び出し（リトライ付き）
+│   │   ├── gemini_api_client.py # Gemini REST API呼び出し（APIキー認証・推奨）
+│   │   ├── gemini_client.py     # Gemini CLI呼び出し（非推奨・個人アカウント提供終了）
 │   │   ├── pii_masker.py        # LLM送信前の個人情報マスキング
 │   │   ├── prompt_builder.py    # 評価プロンプト構築
 │   │   └── response_parser.py   # JSON応答パース・検証
@@ -320,17 +354,34 @@ evaluation_criteria:
 - HRMOS側でパスワード変更やアカウントロックが発生していないか確認してください。
 - `headless: false` にしてブラウザ画面を見ながら原因を特定してください。
 
-### LLM CLIが見つからない
+### AI評価が動かない
 
-```bash
-# Claudeの場合
-claude --version
+まず自己診断を実行してください。原因の切り分けが1コマンドで済みます。
 
-# Geminiの場合
-gemini --version
+```powershell
+.venv\Scripts\python.exe run.py doctor
 ```
 
-使用するプロバイダーのCLIがインストール済みか確認してください。Geminiの場合は `npm install -g @google/gemini-cli` でインストールできます。
+`AI評価の疎通` の行が `NG` の場合、プロバイダーごとに次を確認します。
+
+**`gemini_api` の場合**
+
+- 環境変数 `GEMINI_API_KEY` が設定されているか（設定後は新しいウィンドウで実行）
+- キーが有効か・**課金が有効なプロジェクトのキーか**（[AI Studio](https://aistudio.google.com/apikey) で確認）
+- `HTTP 400/403` が出る場合はキーの誤り・APIの制限設定・地域制限を確認
+
+**`claude` の場合**
+
+```powershell
+claude --version   # 導入確認
+claude doctor      # インストール診断
+```
+
+インストール済みでも**初回のブラウザ認証が済んでいないと非対話実行は失敗します**。一度 `claude` を起動してログインを完了してください。無人実行を安定させたい場合は `claude setup-token` で発行したトークンを環境変数 `CLAUDE_CODE_OAUTH_TOKEN` に設定します。
+
+**`gemini`（CLI）の場合**
+
+2026-06-18 に個人アカウント向けの提供が終了しています。`config.yaml` の `provider` を `gemini_api` に変更してください。
 
 ### AI評価がタイムアウトする
 

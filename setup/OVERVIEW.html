@@ -1,0 +1,1028 @@
+<title>HRMOS評価ツール 全体像</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+:root {
+  /* 書類・資料の手ざわりに寄せた、わずかに黄を含む紙色 */
+  --paper:     #F7F6F2;
+  --surface:   #FFFFFF;
+  --surface-2: #EFEDE7;
+  --ink:       #1A1D21;
+  --ink-2:     #4E555C;
+  --ink-3:     #838B92;
+  --rule:      #E0DDD6;
+  --rule-2:    #C8C4BA;
+
+  --accent:     #34496B;   /* 深い藍。押印された社内資料の色 */
+  --accent-ink: #2A3B57;
+  --accent-bg:  #E7EAF1;
+  --accent-soft:#93A3BF;
+
+  /* 出力Excelの総合ランク色をそのまま持ち込む（実際の成果物と対応させる） */
+  --rank-s: #B8901C;
+  --rank-a: #4C86AE;
+  --rank-b: #4E8C5A;
+  --rank-c: #B07C33;
+  --rank-d: #A96560;
+
+  --warn:    #8A5B0B;
+  --warn-bg: #FBF2DF;
+  --danger:  #A03A31;
+  --danger-bg:#FBEAE7;
+
+  --shadow: 0 1px 2px rgba(26,29,33,.05), 0 10px 28px -14px rgba(26,29,33,.22);
+
+  --display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --body: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:     #16181C;
+    --surface:   #1D2025;
+    --surface-2: #262A30;
+    --ink:       #E7E7E3;
+    --ink-2:     #AAB0B6;
+    --ink-3:     #7C838A;
+    --rule:      #2E333A;
+    --rule-2:    #3E444C;
+
+    --accent:     #8FA6CC;
+    --accent-ink: #A9BCDC;
+    --accent-bg:  #1F2733;
+    --accent-soft:#54637F;
+
+    --rank-s: #D8B54A;
+    --rank-a: #79AECE;
+    --rank-b: #77B584;
+    --rank-c: #D0A063;
+    --rank-d: #CE8C87;
+
+    --warn:    #D9A94E;
+    --warn-bg: #2A2418;
+    --danger:  #E08A80;
+    --danger-bg:#2C1D1B;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.65);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:     #16181C;
+  --surface:   #1D2025;
+  --surface-2: #262A30;
+  --ink:       #E7E7E3;
+  --ink-2:     #AAB0B6;
+  --ink-3:     #7C838A;
+  --rule:      #2E333A;
+  --rule-2:    #3E444C;
+
+  --accent:     #8FA6CC;
+  --accent-ink: #A9BCDC;
+  --accent-bg:  #1F2733;
+  --accent-soft:#54637F;
+
+  --rank-s: #D8B54A;
+  --rank-a: #79AECE;
+  --rank-b: #77B584;
+  --rank-c: #D0A063;
+  --rank-d: #CE8C87;
+
+  --warn:    #D9A94E;
+  --warn-bg: #2A2418;
+  --danger:  #E08A80;
+  --danger-bg:#2C1D1B;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.65);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1140px; margin: 0 auto; padding: 0 24px 100px; }
+
+/* ------------------------------------------------------------- masthead */
+
+.masthead { padding: 76px 0 0; }
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 20px;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(32px, 5.4vw, 52px);
+  line-height: 1.28;
+  margin: 0 0 22px;
+  letter-spacing: .015em;
+  text-wrap: balance;
+}
+.lede { font-size: 17.5px; color: var(--ink-2); max-width: 60ch; margin: 0 0 34px; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--rule-2);
+}
+.stat { padding: 20px 20px 18px 0; border-right: 1px solid var(--rule); }
+.stat:last-child { border-right: none; }
+.stat b {
+  display: block;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 27px;
+  line-height: 1.2;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+.stat span { font-size: 12.5px; color: var(--ink-3); letter-spacing: .03em; }
+
+/* --------------------------------------------------------------- layout */
+
+.cols {
+  display: grid;
+  grid-template-columns: 206px minmax(0, 1fr);
+  gap: 58px;
+  align-items: start;
+  margin-top: 54px;
+}
+@media (max-width: 900px) {
+  .cols { grid-template-columns: 1fr; gap: 0; }
+  nav.rail { position: static; margin-bottom: 44px; }
+}
+
+nav.rail { position: sticky; top: 26px; font-size: 13.5px; }
+nav.rail p.rt {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px;
+}
+nav.rail p.rt + p.rt { margin-top: 22px; }
+nav.rail ol { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; }
+nav.rail a {
+  display: block; padding: 6px 0 6px 13px;
+  color: var(--ink-2); text-decoration: none;
+  border-left: 2px solid var(--rule);
+  transition: color .15s, border-color .15s;
+}
+nav.rail a:hover, nav.rail a:focus-visible { color: var(--accent-ink); border-left-color: var(--accent); }
+
+main { min-width: 0; }
+
+/* ------------------------------------------------------------- sections */
+
+section { margin-bottom: 66px; scroll-margin-top: 24px; }
+
+.part {
+  margin: 0 0 40px;
+  padding: 26px 0 0;
+  border-top: 2px solid var(--ink);
+}
+.part .pn {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 8px;
+}
+.part h2 { font-family: var(--display); font-weight: 800; font-size: 30px; margin: 0 0 10px; }
+.part p { color: var(--ink-2); max-width: 64ch; margin: 0; }
+
+h3 {
+  font-family: var(--display); font-weight: 700; font-size: 22px;
+  margin: 0 0 14px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule-2);
+  text-wrap: balance;
+}
+h4 { font-family: var(--display); font-weight: 700; font-size: 16.5px; margin: 30px 0 8px; }
+p { margin: 0 0 16px; max-width: 68ch; }
+main ul, main ol { max-width: 66ch; padding-left: 1.35em; margin: 0 0 18px; }
+main li { margin-bottom: 8px; }
+
+/* --------------------------------------------------------------- pieces */
+
+.feat {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  margin: 0 0 26px;
+}
+.feat > div { background: var(--surface); padding: 20px 22px 22px; }
+.feat h4 { margin: 0 0 7px; font-size: 16px; }
+.feat p { margin: 0; font-size: 14.5px; color: var(--ink-2); max-width: none; line-height: 1.75; }
+
+figure { margin: 0 0 12px; }
+figure svg { display: block; width: 100%; max-width: 100%; height: auto; }
+
+/* SVG はプレゼンテーション属性に var() を書くと環境差が出るうえ、
+   固定色はダークテーマで背景に沈む。クラス経由でトークンを当てる。 */
+figure svg { color: var(--ink); }
+figure svg .hlbox { fill: var(--accent-bg); stroke: var(--accent); }
+figure svg .hls   { stroke: var(--accent); fill: none; }
+figure svg .hlt   { fill: var(--accent); }
+figure svg .thbox { fill: var(--surface-2); stroke: currentColor; }
+.figwrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 24px 20px 18px;
+  margin: 0 0 10px;
+}
+figcaption {
+  font-size: 13px; color: var(--ink-3);
+  margin: 14px 0 0; padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  max-width: 70ch;
+}
+
+.tw { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); margin: 0 0 24px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  background: var(--surface-2); font-family: var(--display); font-weight: 700;
+  font-size: 13.5px; white-space: nowrap;
+}
+tr:last-child td { border-bottom: none; }
+td.mono, td.num { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+td.num { text-align: right; white-space: nowrap; }
+
+.rk { font-family: var(--mono); font-weight: 700; font-size: 15px; }
+.rk.s { color: var(--rank-s); } .rk.a { color: var(--rank-a); } .rk.b { color: var(--rank-b); }
+.rk.c { color: var(--rank-c); } .rk.d { color: var(--rank-d); }
+.bar { display: block; height: 7px; border-radius: 2px; min-width: 2px; }
+.bar.s { background: var(--rank-s); } .bar.a { background: var(--rank-a); } .bar.b { background: var(--rank-b); }
+.bar.c { background: var(--rank-c); } .bar.d { background: var(--rank-d); }
+
+code {
+  font-family: var(--mono); font-size: .87em;
+  background: var(--surface-2); padding: 2px 6px; border-radius: 2px;
+  word-break: break-word;
+}
+pre {
+  font-family: var(--mono); font-size: 13px; line-height: 1.7;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent-soft);
+  border-radius: 0 3px 3px 0; padding: 16px 18px;
+  overflow-x: auto; margin: 0 0 22px;
+}
+pre code { background: none; padding: 0; }
+pre .c { color: var(--ink-3); }
+
+.note {
+  border-left: 3px solid var(--accent); background: var(--accent-bg);
+  padding: 16px 20px; margin: 0 0 22px; border-radius: 0 3px 3px 0;
+}
+.note.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.note.danger { border-left-color: var(--danger); background: var(--danger-bg); }
+.note > :last-child { margin-bottom: 0; }
+.note .lb {
+  display: block; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: .14em; text-transform: uppercase; margin-bottom: 7px; color: var(--accent-ink);
+}
+.note.warn .lb { color: var(--warn); }
+.note.danger .lb { color: var(--danger); }
+.note p { max-width: none; }
+
+a { color: var(--accent-ink); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+footer {
+  border-top: 2px solid var(--ink); margin-top: 24px; padding-top: 22px;
+  font-size: 13.5px; color: var(--ink-3);
+}
+
+.toggle {
+  position: fixed; top: 16px; right: 16px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em;
+  background: var(--surface); color: var(--ink-2);
+  border: 1px solid var(--rule-2); border-radius: 2px;
+  padding: 7px 11px; cursor: pointer; z-index: 20;
+}
+.toggle:hover { color: var(--accent-ink); border-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<button class="toggle" id="tg" aria-label="表示テーマを切り替える">THEME</button>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">System Overview</p>
+    <h1>HRMOS採用<br>応募者書類 AI自動評価ツール</h1>
+    <p class="lede">
+      応募者の履歴書・職務経歴書を自動で取得し、あらかじめ決めた評価基準でAIが採点して、
+      Excel の一覧表にまとめます。書類選考の下ごしらえを、1コマンドで終わらせるための道具です。
+    </p>
+    <div class="stats">
+      <div class="stat"><b>1</b><span>実行はコマンド1つ</span></div>
+      <div class="stat"><b>3<small>形式</small></b><span>PDF / Word / Excel</span></div>
+      <div class="stat"><b>1&ndash;5<small>点</small></b><span>評価項目ごとの採点</span></div>
+      <div class="stat"><b>3.9<small>秒</small></b><span>1名あたり評価時間</span></div>
+      <div class="stat"><b>0.8<small>円</small></b><span>1名あたり費用</span></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--ink-3);margin:14px 0 0;">※ 評価時間と費用は Gemini（<code>gemini-3.5-flash-lite</code>）を使った場合の実測値です。Claude を選んだ場合の費用は契約中のプランに含まれます。</p>
+  </header>
+
+  <div class="cols">
+    <nav class="rail" aria-label="目次">
+      <p class="rt">第1部 — 機能</p>
+      <ol>
+        <li><a href="#what">何をするツールか</a></li>
+        <li><a href="#flow">処理の流れ</a></li>
+        <li><a href="#output">出力される成果物</a></li>
+        <li><a href="#custom">評価基準の設定</a></li>
+        <li><a href="#ops">運用と自動実行</a></li>
+      </ol>
+      <p class="rt">第2部 — 構造</p>
+      <ol>
+        <li><a href="#layers">レイヤー構成</a></li>
+        <li><a href="#modules">モジュール一覧</a></li>
+        <li><a href="#ai">AI評価の仕組み</a></li>
+        <li><a href="#data">データモデル</a></li>
+        <li><a href="#errors">エラー処理</a></li>
+        <li><a href="#stack">技術スタック</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+      <!-- =========================================== 第1部 -->
+      <div class="part">
+        <span class="pn">Part 1</span>
+        <h2>機能 — 何ができるか</h2>
+        <p>採用担当者の目線での説明です。技術的な内部構造は第2部で扱います。</p>
+      </div>
+
+      <section id="what">
+        <h3>何をするツールか</h3>
+        <p>
+          これまで人が1件ずつ開いて読んでいた応募書類を、ツールが代わりに集めて読み、
+          評価基準ごとに点数とコメントを付けます。<b>担当者は出来上がった一覧表を見て判断する</b>ところから始められます。
+        </p>
+
+        <div class="feat">
+          <div>
+            <h4>書類の自動取得</h4>
+            <p>HRMOS採用にログインし、応募者一覧から添付書類（PDF / Word / Excel）をまとめてダウンロードします。「さらに表示」も自動でクリックし、全件を取りこぼしません。</p>
+          </div>
+          <div>
+            <h4>評価基準ごとの採点</h4>
+            <p>設定した項目それぞれに1〜5点を付け、その点数の根拠となるコメントを書きます。点の付け方の物差し（ルーブリック）をAIに明示しているため、応募者間のばらつきを抑えています。</p>
+          </div>
+          <div>
+            <h4>面接質問の自動生成</h4>
+            <p>その応募者の書類内容に即した質問を3つ作ります。「何を確かめたいか」の観点も設定で指定できます。</p>
+          </div>
+          <div>
+            <h4>1次通過候補の判定</h4>
+            <p>年齢帯ごとに平均点のしきい値を決めておくと、○ / △ で候補を絞り込みます。若手とベテランで同じ物差しにならないようにするためです。</p>
+          </div>
+          <div>
+            <h4>Excel 一覧表の出力</h4>
+            <p>1行＝1応募者。総合ランクは色分けされ、評価項目のバランスはレーダーチャートで一目で分かります。</p>
+          </div>
+          <div>
+            <h4>メール通知</h4>
+            <p>評価が終わるとサマリと Excel が届きます。新規0件のときも「新規なし」を通知するため、<b>無音＝失敗の見逃しが起きません</b>。</p>
+          </div>
+        </div>
+
+        <div class="note">
+          <span class="lb">前回の続きから動きます</span>
+          <p>評価済みの応募者は自動的に飛ばされ、<b>新しく応募してきた人だけ</b>が処理されます。毎日実行しても同じ人を再評価してコストを使うことはありません。</p>
+        </div>
+
+        <div class="note danger">
+          <span class="lb">最終判断は必ず人が</span>
+          <p>AI の評価は<b>参考情報</b>です。採用選考でのAI利用は、有資格者による事前レビューが利用規約上の要件になっています。AIの点数だけで足切りする運用にはしないでください。</p>
+        </div>
+      </section>
+
+      <section id="flow">
+        <h3>処理の流れ</h3>
+        <p><code>run_scan.bat</code> をダブルクリックすると、次の6段が順に走ります。途中で人が操作する場面はありません。</p>
+
+        <div class="figwrap">
+          <figure>
+            <svg viewBox="0 0 980 330" role="img"
+                 aria-label="6段の処理パイプライン。認証、一覧収集、書類ダウンロード、テキスト抽出、AI評価、保存と出力の順に進み、上のHRMOS採用と下のAI・SQLite・Excel・メールに接続する。">
+              <defs>
+                <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+                </marker>
+                <marker id="ara" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" class="hlt"/>
+                </marker>
+              </defs>
+
+              <!-- 外部システム: HRMOS -->
+              <rect x="20" y="16" width="470" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 4" opacity=".65"/>
+              <text x="255" y="42" text-anchor="middle" font-size="13" fill="currentColor" opacity=".8">HRMOS採用（Webサイト）</text>
+
+              <!-- パイプライン本体 -->
+              <g font-size="12.5" fill="currentColor">
+                <rect x="20"  y="130" width="130" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="85"  y="156" text-anchor="middle" font-size="10.5" opacity=".55">1</text>
+                <text x="85"  y="176" text-anchor="middle">ログイン</text>
+
+                <rect x="185" y="130" width="130" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="250" y="156" text-anchor="middle" font-size="10.5" opacity=".55">2</text>
+                <text x="250" y="176" text-anchor="middle">一覧の収集</text>
+
+                <rect x="350" y="130" width="130" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="415" y="156" text-anchor="middle" font-size="10.5" opacity=".55">3</text>
+                <text x="415" y="176" text-anchor="middle">書類の取得</text>
+
+                <rect x="515" y="130" width="130" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="580" y="156" text-anchor="middle" font-size="10.5" opacity=".55">4</text>
+                <text x="580" y="176" text-anchor="middle">文字の取り出し</text>
+
+                <rect x="680" y="130" width="130" height="62" rx="3" class="hlbox" stroke-width="2"/>
+                <text x="745" y="156" text-anchor="middle" font-size="10.5" opacity=".55">5</text>
+                <text x="745" y="176" text-anchor="middle" font-weight="700">AI評価</text>
+
+                <rect x="845" y="130" width="115" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="902" y="156" text-anchor="middle" font-size="10.5" opacity=".55">6</text>
+                <text x="902" y="176" text-anchor="middle">保存・出力</text>
+              </g>
+
+              <!-- 段間の矢印と流れるデータ -->
+              <g stroke="currentColor" stroke-width="1.4" marker-end="url(#ar)" fill="none">
+                <line x1="150" y1="161" x2="180" y2="161"/>
+                <line x1="315" y1="161" x2="345" y2="161"/>
+                <line x1="480" y1="161" x2="510" y2="161"/>
+                <line x1="645" y1="161" x2="675" y2="161"/>
+                <line x1="810" y1="161" x2="840" y2="161"/>
+              </g>
+              <g font-size="10" fill="currentColor" opacity=".6" text-anchor="middle">
+                <text x="250" y="210">応募者リスト</text>
+                <text x="415" y="210">PDF / Word</text>
+                <text x="580" y="210">本文テキスト</text>
+                <text x="745" y="210">採点JSON</text>
+              </g>
+
+              <!-- HRMOS への接続 -->
+              <g stroke="currentColor" stroke-width="1.2" opacity=".6" fill="none" stroke-dasharray="4 3">
+                <line x1="85"  y1="130" x2="85"  y2="58" marker-end="url(#ar)"/>
+                <line x1="250" y1="130" x2="250" y2="58" marker-end="url(#ar)"/>
+                <line x1="415" y1="130" x2="415" y2="58" marker-end="url(#ar)"/>
+              </g>
+
+              <!-- AI への接続 -->
+              <rect x="665" y="252" width="160" height="40" rx="3" class="hls" stroke-width="1.5"/>
+              <text x="745" y="277" text-anchor="middle" font-size="12" class="hlt" font-weight="700">Gemini / Claude</text>
+              <line x1="745" y1="222" x2="745" y2="250" class="hls" stroke-width="1.5" marker-end="url(#ara)" marker-start="url(#ara)"/>
+              <text x="757" y="242" font-size="9.5" class="hlt" opacity=".85">プロンプト / 採点</text>
+
+              <!-- 出力先 -->
+              <g stroke="currentColor" stroke-width="1.2" fill="none" opacity=".75">
+                <line x1="902" y1="192" x2="902" y2="250" marker-end="url(#ar)"/>
+              </g>
+              <rect x="838" y="252" width="122" height="40" rx="3" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".75"/>
+              <text x="899" y="270" text-anchor="middle" font-size="11" fill="currentColor">SQLite / Excel</text>
+              <text x="899" y="284" text-anchor="middle" font-size="11" fill="currentColor">メール</text>
+
+              <!-- 差分処理の注記 -->
+              <text x="20" y="316" font-size="10.5" fill="currentColor" opacity=".6">※ 2 で集めた応募者のうち、まだ評価していない人だけが 3〜6 に進みます（差分処理）</text>
+            </svg>
+            <figcaption>
+              段ごとに扱うものが変わっていきます。ページ（HTML）→ ファイル（PDF）→ 文字列 → 採点結果（JSON）→ 表。
+              AI に渡るのは <b>4 で取り出した文字だけ</b>で、ファイルそのものは送られません。
+            </figcaption>
+          </figure>
+        </div>
+
+        <h4>AIに渡るもの・課金されるタイミング</h4>
+        <p>
+          外部のAIと通信するのは、上の図の <b>5「AI評価」だけ</b>です。
+          それ以外の段はすべてPC内とHRMOSの間で完結します。
+        </p>
+        <div class="tw">
+          <table>
+            <thead><tr><th>コマンド</th><th>AIを呼ぶか</th><th>費用</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">run.py scan</td><td><b>呼ぶ</b>（新規の応募者ごとに1回）</td><td>1名あたり約0.8円</td></tr>
+              <tr><td class="mono">run.py scan --all</td><td><b>呼ぶ</b>（登録済み全員ぶん）</td><td>人数 &times; 約0.8円</td></tr>
+              <tr><td class="mono">run.py report</td><td>呼ばない</td><td>0円</td></tr>
+              <tr><td class="mono">run.py status</td><td>呼ばない</td><td>0円</td></tr>
+              <tr><td class="mono">run.py doctor</td><td>呼ぶ（疎通確認で1回だけ）</td><td>ごく僅か</td></tr>
+              <tr><td class="mono">run.py doctor --skip-llm</td><td>呼ばない</td><td>0円</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          AIに送られるのは <b>書類から取り出した文章（個人情報を伏せたもの）</b>・
+          <b>評価基準</b>・<b>面接質問の観点</b> の3つだけです。
+          <b>PDF等のファイルそのもの、HRMOSのログイン情報、データベースの中身は送信されません。</b>
+          設定ファイルを編集しただけでは課金は発生しません。
+        </p>
+
+        <div class="note">
+          <span class="lb">送信前に個人情報を伏せます</span>
+          <p>AI に渡す直前に、氏名・電話番号・住所を目印（プレースホルダ）に置き換え、返ってきた文章の中で元に戻しています。ただし<b>職歴・所属企業名・資格は伏せていません</b>（評価に必要なため）。</p>
+        </div>
+      </section>
+
+      <section id="output">
+        <h3>出力される成果物</h3>
+
+        <h4>Excel 一覧表</h4>
+        <p>1行＝1応募者。左から順に、まず判断に効く要約が並び、右へ行くほど詳細になります。</p>
+        <pre><code>応募者名 / 性別 / 年齢 / HRMOS URL / ファイル名
+  → 1次通過候補（○△）→ 平均点 → 合計点 → 総合ランク
+  → レーダーチャート → 総合評価
+  → 各評価基準（点）（評価コメント）× 項目数
+  → 備考欄 → 質問候補1〜3</code></pre>
+
+        <h4>総合ランクと実際の分布</h4>
+        <p>平均点（合計点 &divide; 評価項目数）からランクを決め、Excel のセルに色を付けます。</p>
+        <div class="tw">
+          <table>
+            <thead><tr><th>ランク</th><th>条件（平均点）</th><th>セルの色</th></tr></thead>
+            <tbody>
+              <tr><td><span class="rk s">S</span></td><td class="mono">4.5 以上</td><td><span class="bar s" style="width:64px"></span></td></tr>
+              <tr><td><span class="rk a">A</span></td><td class="mono">3.5 以上</td><td><span class="bar a" style="width:64px"></span></td></tr>
+              <tr><td><span class="rk b">B</span></td><td class="mono">2.5 以上</td><td><span class="bar b" style="width:64px"></span></td></tr>
+              <tr><td><span class="rk c">C</span></td><td class="mono">1.5 以上</td><td><span class="bar c" style="width:64px"></span></td></tr>
+              <tr><td><span class="rk d">D</span></td><td class="mono">1.5 未満</td><td><span class="bar d" style="width:64px"></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>メール通知（任意）</h4>
+        <p>評価サマリ表と Excel が届きます。表の「○」は HRMOS の応募者ページへのリンクになっており、そのままクリックで開けます。1次通過候補の経歴書を添付することもできます（個人情報を含むため、社内ポリシーを確認のうえで）。</p>
+        <p>送られるのは次の3種類です。<b>いずれの場合も必ず何かが届く</b>ため、届かない＝異常と判断できます。</p>
+        <ul>
+          <li><b>評価結果メール</b> — 新規応募者を1名以上評価できたとき</li>
+          <li><b>「新規なし」通知</b> — 新規0名で正常に終わったとき</li>
+          <li><b>失敗アラート</b> — 認証失敗・一覧0件・評価成功0件・処理中の例外</li>
+        </ul>
+      </section>
+
+      <section id="custom">
+        <h3>評価基準の設定</h3>
+        <p>評価項目は <code>config.yaml</code> で自由に決められます。項目名と、AIに伝える「何を見るか」の説明を書くだけです。</p>
+        <pre><code>evaluation_criteria:
+  - name: "プログラミング経験"
+    description: "IT開発工程における開発経験（Python, JavaScript 等）の経験と深さ"
+  - name: "マネジメント経験"
+    description: "チームリーダー、プロジェクトマネジメント等の経験の有無と深さ"
+
+first_pass_criteria:          <span class="c"># 1次通過候補の判定（年齢帯ごとの平均点しきい値）</span>
+  - age_range: [25, 29]
+    min_avg_score: 2.4        <span class="c"># これ以上で○、0.3 点手前まで△</span></code></pre>
+        <p><b>description を具体的に書くほど評価が安定します。</b>項目数に制限はありませんが、増やすほど1件あたりの処理時間と費用が伸びます。</p>
+        <div class="note warn">
+          <span class="lb">評価基準を変えたら</span>
+          <p>過去に評価した人と新しい人で物差しが変わります。過去分と比較したい場合は <code>run.py scan --all</code> で全員を再評価できますが、<b>登録済みの応募者全員に対して HRMOS へのアクセスと AI 呼び出しが発生します</b>。件数によっては数時間かかるため、実行前に <code>run.py status</code> で対象数を確認してください。</p>
+        </div>
+      </section>
+
+      <section id="ops">
+        <h3>運用と自動実行</h3>
+        <div class="tw">
+          <table>
+            <thead><tr><th>コマンド</th><th>内容</th><th>使いどころ</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">run.py scan</td><td>新規応募者をAI評価し、Excelを出力</td><td><b>日常はこれだけ</b></td></tr>
+              <tr><td class="mono">run.py scan --all</td><td>全応募者を再評価</td><td>評価基準を変えたとき</td></tr>
+              <tr><td class="mono">run.py report</td><td>DBの過去分をExcelに再出力（評価はしない）</td><td>過去データの出し直し</td></tr>
+              <tr><td class="mono">run.py status</td><td>評価の進捗を表示</td><td>状況確認</td></tr>
+              <tr><td class="mono">run.py doctor</td><td>環境を9項目で自己診断</td><td>導入直後・不調のとき</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          平日 12:30 と 17:30 の自動実行を Windows のタスクスケジューラに登録できます（<code>setup\setup_scheduler.bat</code>）。
+          管理者権限は不要で、スリープからの復帰後に取りこぼしを実行する設定も同時に入ります。
+        </p>
+      </section>
+
+      <!-- =========================================== 第2部 -->
+      <div class="part">
+        <span class="pn">Part 2</span>
+        <h2>構造 — どう作られているか</h2>
+        <p>保守・引き継ぎのための技術説明です。</p>
+      </div>
+
+      <section id="layers">
+        <h3>レイヤー構成</h3>
+        <p>
+          <code>run.py</code> が入り口、<code>src/main.py</code> が全体の進行役です。
+          main が5つのレイヤーを順に呼び出し、<b>レイヤー同士は直接やり取りしません</b>。
+          そのため1つのレイヤーを差し替えても他に波及しません（AI を Claude から Gemini へ替えられたのはこの構造のためです）。
+        </p>
+
+        <div class="figwrap">
+          <figure>
+            <svg viewBox="0 0 900 400" role="img"
+                 aria-label="run.py から main.py が5つのレイヤー（browser、parser、evaluator、database、reporter）を呼び出す構成図。レイヤー間に直接の依存はない。">
+              <defs>
+                <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+                </marker>
+              </defs>
+
+              <rect x="330" y="14" width="240" height="40" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <text x="450" y="39" text-anchor="middle" font-size="13" fill="currentColor" font-family="monospace">run.py（CLI）</text>
+              <line x1="450" y1="54" x2="450" y2="82" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar2)"/>
+
+              <rect x="300" y="84" width="300" height="52" rx="3" class="hlbox" stroke-width="2"/>
+              <text x="450" y="106" text-anchor="middle" font-size="13.5" class="hlt" font-weight="700" font-family="monospace">src/main.py</text>
+              <text x="450" y="124" text-anchor="middle" font-size="10.5" class="hlt" opacity=".85">オーケストレーター（進行役）</text>
+
+              <!-- 5レイヤーへの分岐 -->
+              <g stroke="currentColor" stroke-width="1.3" fill="none" opacity=".8">
+                <path d="M450,136 L450,168" />
+                <path d="M110,168 L790,168" />
+                <path d="M110,168 L110,200" marker-end="url(#ar2)"/>
+                <path d="M280,168 L280,200" marker-end="url(#ar2)"/>
+                <path d="M450,168 L450,200" marker-end="url(#ar2)"/>
+                <path d="M620,168 L620,200" marker-end="url(#ar2)"/>
+                <path d="M790,168 L790,200" marker-end="url(#ar2)"/>
+              </g>
+
+              <g font-size="12" fill="currentColor" text-anchor="middle">
+                <rect x="40"  y="202" width="140" height="104" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="110" y="226" font-family="monospace" font-size="12.5">browser/</text>
+                <text x="110" y="250" font-size="11.5" opacity=".8">ブラウザ操作</text>
+                <text x="110" y="272" font-size="10.5" opacity=".6">Playwright</text>
+                <text x="110" y="290" font-size="10.5" opacity=".6">HRMOS</text>
+
+                <rect x="210" y="202" width="140" height="104" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="280" y="226" font-family="monospace" font-size="12.5">parser/</text>
+                <text x="280" y="250" font-size="11.5" opacity=".8">文字の取り出し</text>
+                <text x="280" y="272" font-size="10.5" opacity=".6">pdfplumber</text>
+                <text x="280" y="290" font-size="10.5" opacity=".6">docx / openpyxl</text>
+
+                <rect x="380" y="202" width="140" height="104" rx="3" class="hlbox" stroke-width="2"/>
+                <text x="450" y="226" font-family="monospace" font-size="12.5" class="hlt" font-weight="700">evaluator/</text>
+                <text x="450" y="250" font-size="11.5" class="hlt">AI評価</text>
+                <text x="450" y="272" font-size="10.5" class="hlt" opacity=".8">PIIマスク</text>
+                <text x="450" y="290" font-size="10.5" class="hlt" opacity=".8">プロンプト / 解析</text>
+
+                <rect x="550" y="202" width="140" height="104" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="620" y="226" font-family="monospace" font-size="12.5">database/</text>
+                <text x="620" y="250" font-size="11.5" opacity=".8">永続化</text>
+                <text x="620" y="272" font-size="10.5" opacity=".6">SQLite</text>
+                <text x="620" y="290" font-size="10.5" opacity=".6">Repository</text>
+
+                <rect x="720" y="202" width="140" height="104" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="790" y="226" font-family="monospace" font-size="12.5">reporter/</text>
+                <text x="790" y="250" font-size="11.5" opacity=".8">出力・通知</text>
+                <text x="790" y="272" font-size="10.5" opacity=".6">Excel</text>
+                <text x="790" y="290" font-size="10.5" opacity=".6">Resend メール</text>
+              </g>
+
+              <text x="450" y="345" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">
+                レイヤー間に横の矢印は無い ＝ 互いを知らない
+              </text>
+              <line x1="150" y1="362" x2="750" y2="362" stroke="currentColor" stroke-width="1" stroke-dasharray="3 4" opacity=".35"/>
+              <text x="450" y="384" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".55">
+                差し替えの影響が main.py の呼び出し1行に閉じる
+              </text>
+            </svg>
+            <figcaption>
+              進行役の <code>main.py</code> だけが全体を知っており、各レイヤーは自分の仕事しか知りません。
+              AI プロバイダを増やしたときも、変更は <code>evaluator/</code> の中と設定値だけで済みました。
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="modules">
+        <h3>モジュール一覧</h3>
+        <div class="tw">
+          <table>
+            <thead><tr><th>ファイル</th><th>役割</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">main.py</td><td>全体の進行役。各レイヤーを順に呼ぶ</td></tr>
+              <tr><td class="mono">config.py</td><td>設定の読み込み・検証・環境変数での上書き</td></tr>
+              <tr><td class="mono">doctor.py</td><td>環境の自己診断（9項目）</td></tr>
+              <tr><td class="mono">browser/auth.py</td><td>HRMOS認証。2段階ログインとセッション有効性の判定</td></tr>
+              <tr><td class="mono">browser/navigator.py</td><td>応募者一覧の巡回と添付書類のダウンロード</td></tr>
+              <tr><td class="mono">browser/page_utils.py</td><td>ページ遷移の共通処理（リトライ付き）</td></tr>
+              <tr><td class="mono">browser/selectors.py</td><td>ページ要素のセレクタ定義。<b>HRMOSのUI変更時はここだけ直す</b></td></tr>
+              <tr><td class="mono">parser/document.py</td><td>PDF / Word / Excel からのテキスト抽出</td></tr>
+              <tr><td class="mono">evaluator/llm_client.py</td><td>AIプロバイダの切替</td></tr>
+              <tr><td class="mono">evaluator/gemini_api_client.py</td><td>Gemini REST API 呼び出し（APIキー認証）</td></tr>
+              <tr><td class="mono">evaluator/claude_client.py</td><td>Claude CLI 呼び出し</td></tr>
+              <tr><td class="mono">evaluator/pii_masker.py</td><td>送信前の個人情報マスクと、応答後の復元</td></tr>
+              <tr><td class="mono">evaluator/prompt_builder.py</td><td>評価プロンプトの構築、ランク・1次通過判定</td></tr>
+              <tr><td class="mono">evaluator/response_parser.py</td><td>JSON応答の抽出・検証・正規化</td></tr>
+              <tr><td class="mono">database/models.py</td><td>SQLiteスキーマ定義と初期化</td></tr>
+              <tr><td class="mono">database/repository.py</td><td>データアクセス層</td></tr>
+              <tr><td class="mono">reporter/export.py</td><td>Excelレポート生成（レーダーチャート・色分け）</td></tr>
+              <tr><td class="mono">reporter/notify.py</td><td>Resendによるメール通知</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="ai">
+        <h3>AI評価の仕組み</h3>
+        <p>
+          書類のテキストと評価基準からプロンプトを組み立て、AI に送り、返ってきた JSON を検証して保存します。
+          <b>AI との接点はこの1箇所だけ</b>で、他のレイヤーは AI の存在を知りません。
+        </p>
+
+        <div class="figwrap">
+          <figure>
+            <svg viewBox="0 0 880 470" role="img"
+                 aria-label="AI評価の内部フロー。テキストにPIIマスクをかけ、プロンプトを構築し、GeminiまたはClaudeへ送信、JSONを解析して個人情報を復元しDBへ保存する。">
+              <defs>
+                <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+                </marker>
+              </defs>
+              <g font-size="12.5" fill="currentColor" text-anchor="middle">
+                <text x="440" y="20" font-size="11.5" opacity=".7">応募者の全書類テキスト（結合済み）</text>
+                <line x1="440" y1="30" x2="440" y2="52" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar3)"/>
+
+                <rect x="290" y="54" width="300" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="440" y="76" font-family="monospace" font-size="12">pii_masker.py</text>
+                <text x="440" y="94" font-size="10.5" opacity=".7">氏名・電話・住所 → プレースホルダ</text>
+                <line x1="440" y1="106" x2="440" y2="128" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar3)"/>
+
+                <rect x="230" y="130" width="420" height="82" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="440" y="152" font-family="monospace" font-size="12">prompt_builder.py</text>
+                <text x="440" y="172" font-size="10.5" opacity=".7">評価基準 ＋ 採点ルーブリック ＋ 質問の観点</text>
+                <text x="440" y="190" font-size="10.5" opacity=".7">＋ 出力JSONスキーマ</text>
+                <line x1="440" y1="212" x2="440" y2="234" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar3)"/>
+
+                <rect x="230" y="236" width="420" height="96" rx="3" class="hlbox" stroke-width="2"/>
+                <text x="440" y="258" font-family="monospace" font-size="12" class="hlt" font-weight="700">llm_client.py</text>
+                <line x1="330" y1="268" x2="330" y2="278" class="hls" stroke-width="1"/>
+                <rect x="252" y="278" width="176" height="42" rx="3" class="hls" stroke-width="1.2"/>
+                <text x="340" y="295" font-size="11" class="hlt" font-weight="700">gemini_api</text>
+                <text x="340" y="311" font-size="9.5" class="hlt" opacity=".85">REST API / APIキー</text>
+                <rect x="452" y="278" width="176" height="42" rx="3" class="hls" stroke-width="1.2" stroke-dasharray="4 3"/>
+                <text x="540" y="295" font-size="11" class="hlt">claude</text>
+                <text x="540" y="311" font-size="9.5" class="hlt" opacity=".85">CLI / サブスク</text>
+
+                <line x1="440" y1="332" x2="440" y2="354" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar3)"/>
+                <text x="470" y="348" font-size="10" opacity=".65" text-anchor="start">JSON文字列</text>
+
+                <rect x="290" y="356" width="300" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="440" y="378" font-family="monospace" font-size="12">response_parser.py</text>
+                <text x="440" y="396" font-size="10.5" opacity=".7">抽出・検証・1〜5点へ正規化</text>
+                <line x1="440" y1="408" x2="440" y2="430" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar3)"/>
+
+                <rect x="290" y="432" width="300" height="34" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="440" y="454" font-size="11.5">個人情報を復元して SQLite へ保存</text>
+              </g>
+
+              <!-- リトライの注記 -->
+              <g font-size="10" fill="currentColor" opacity=".65">
+                <text x="666" y="284" text-anchor="start">リトライ 最大3回</text>
+                <text x="666" y="300" text-anchor="start">タイムアウト 300秒</text>
+                <text x="666" y="316" text-anchor="start">上限 80,000文字</text>
+              </g>
+            </svg>
+            <figcaption>
+              マスクは <b>送信の直前</b>、復元は <b>受信の直後</b>に行われます。DB に保存されるのは復元後の文章です。
+              実線が現在の既定（Gemini API）、破線が選択可能なもう一方（Claude）。
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="tw">
+          <table>
+            <thead><tr><th>provider</th><th>認証</th><th>費用</th><th>状態</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">gemini_api</td><td>APIキー（環境変数）<br><span style="font-size:12.5px;color:var(--ink-3)">Google Workspace のライセンスとは別契約</span></td><td>従量。1名 約0.8円<br><span style="font-size:12.5px;color:var(--ink-3)">Cloud の課金設定が必要</span></td><td><b>既定</b>。モデルは <code>gemini-3.5-flash-lite</code></td></tr>
+              <tr><td class="mono">claude</td><td>初回のみブラウザ認証</td><td>サブスクリプションに含まれる</td><td>選択可能</td></tr>
+              <tr><td class="mono">gemini</td><td>Gemini CLI</td><td>—</td><td><b>非推奨</b>。個人アカウント向け提供は2026-06-18に終了</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="data">
+        <h3>データモデル</h3>
+        <p>SQLite に4つのテーブルを持ちます。評価結果は<b>1応募者 × 評価基準の数</b>だけ行が入る形です。</p>
+
+        <div class="figwrap">
+          <figure>
+            <svg viewBox="0 0 880 340" role="img"
+                 aria-label="ER図。applicants が documents と evaluations を1対多で持ち、documents も evaluations を1対多で持つ。scan_runs は実行履歴として独立。">
+              <defs>
+                <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+                </marker>
+              </defs>
+              <g fill="currentColor">
+                <!-- applicants -->
+                <rect x="20" y="20" width="210" height="128" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="20" y="20" width="210" height="30" rx="3" class="thbox" stroke-width="1.5"/>
+                <text x="125" y="40" text-anchor="middle" font-size="12.5" font-family="monospace" font-weight="700">applicants</text>
+                <text x="34" y="68" font-size="11" font-family="monospace">id (PK)</text>
+                <text x="34" y="86" font-size="11" font-family="monospace">name</text>
+                <text x="34" y="104" font-size="11" font-family="monospace">page_url</text>
+                <text x="34" y="122" font-size="11" font-family="monospace">status</text>
+                <text x="34" y="140" font-size="11" font-family="monospace" opacity=".6">scanned_at</text>
+
+                <!-- documents -->
+                <rect x="330" y="20" width="210" height="128" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="330" y="20" width="210" height="30" rx="3" class="thbox" stroke-width="1.5"/>
+                <text x="435" y="40" text-anchor="middle" font-size="12.5" font-family="monospace" font-weight="700">documents</text>
+                <text x="344" y="68" font-size="11" font-family="monospace">id (PK)</text>
+                <text x="344" y="86" font-size="11" font-family="monospace">applicant_id (FK)</text>
+                <text x="344" y="104" font-size="11" font-family="monospace">filename</text>
+                <text x="344" y="122" font-size="11" font-family="monospace">file_path</text>
+                <text x="344" y="140" font-size="11" font-family="monospace" opacity=".6">parsed_text_length</text>
+
+                <!-- scan_runs -->
+                <rect x="640" y="20" width="210" height="128" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="640" y="20" width="210" height="30" rx="3" class="thbox" stroke-width="1.5"/>
+                <text x="745" y="40" text-anchor="middle" font-size="12.5" font-family="monospace" font-weight="700">scan_runs</text>
+                <text x="654" y="68" font-size="11" font-family="monospace">id (PK)</text>
+                <text x="654" y="86" font-size="11" font-family="monospace">started_at</text>
+                <text x="654" y="104" font-size="11" font-family="monospace">completed_at</text>
+                <text x="654" y="122" font-size="11" font-family="monospace">scanned_count</text>
+                <text x="654" y="140" font-size="11" font-family="monospace" opacity=".6">status</text>
+
+                <!-- evaluations -->
+                <rect x="230" y="204" width="420" height="118" rx="3" class="hlbox" stroke-width="2"/>
+                <rect x="230" y="204" width="420" height="30" rx="3" class="hlbox" stroke-width="2"/>
+                <text x="440" y="224" text-anchor="middle" font-size="12.5" font-family="monospace" font-weight="700" class="hlt">evaluations</text>
+                <text x="248" y="252" font-size="11" font-family="monospace" class="hlt">applicant_id (FK)</text>
+                <text x="248" y="270" font-size="11" font-family="monospace" class="hlt">document_id (FK)</text>
+                <text x="248" y="288" font-size="11" font-family="monospace" class="hlt">criteria_name</text>
+                <text x="248" y="306" font-size="11" font-family="monospace" class="hlt">score / comment</text>
+                <text x="452" y="252" font-size="11" font-family="monospace" class="hlt" opacity=".85">total_score</text>
+                <text x="452" y="270" font-size="11" font-family="monospace" class="hlt" opacity=".85">overall_comment</text>
+                <text x="452" y="288" font-size="11" font-family="monospace" class="hlt" opacity=".85">interview_questions</text>
+                <text x="452" y="306" font-size="11" font-family="monospace" class="hlt" opacity=".85">gender / age / remarks</text>
+              </g>
+
+              <!-- リレーション -->
+              <g stroke="currentColor" stroke-width="1.3" fill="none">
+                <path d="M230,84 L330,84" marker-end="url(#ar4)"/>
+                <path d="M125,148 L125,262 L228,262" marker-end="url(#ar4)"/>
+                <path d="M435,148 L435,202" marker-end="url(#ar4)"/>
+              </g>
+              <g font-size="10.5" fill="currentColor" opacity=".7">
+                <text x="280" y="78" text-anchor="middle">1 : N</text>
+                <text x="140" y="200" text-anchor="start">1 : N</text>
+                <text x="446" y="178" text-anchor="start">1 : N</text>
+              </g>
+
+              <text x="440" y="336" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".65">
+                evaluations は 1応募者あたり「評価基準の数」だけ行が入る（総合評価などの共通項目は各行に重複して保持）
+              </text>
+            </svg>
+            <figcaption>
+              <code>scan_runs</code> は実行履歴で、他テーブルと外部キーでは繋がっていません（<code>evaluations.scan_run_id</code> に実行IDが入るだけ）。
+              「どの回の結果か」で Excel を出し分けるために使います。
+            </figcaption>
+          </figure>
+        </div>
+
+        <h4>応募者の状態遷移</h4>
+        <div class="figwrap">
+          <figure>
+            <svg viewBox="0 0 700 170" role="img"
+                 aria-label="applicants.status の遷移図。pending から scanned または error へ進み、--all フラグで pending に戻せる。">
+              <defs>
+                <marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+                </marker>
+              </defs>
+              <g fill="currentColor" text-anchor="middle">
+                <rect x="30" y="52" width="130" height="44" rx="22" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="95" y="79" font-size="12.5" font-family="monospace">pending</text>
+
+                <rect x="450" y="14" width="130" height="44" rx="22" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <text x="515" y="41" font-size="12.5" font-family="monospace">scanned</text>
+
+                <rect x="450" y="90" width="130" height="44" rx="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3"/>
+                <text x="515" y="117" font-size="12.5" font-family="monospace">error</text>
+              </g>
+              <g stroke="currentColor" stroke-width="1.3" fill="none">
+                <path d="M160,66 L448,36" marker-end="url(#ar5)"/>
+                <path d="M160,84 L448,112" marker-end="url(#ar5)"/>
+                <path d="M515,134 L515,152 L95,152 L95,98" marker-end="url(#ar5)" stroke-dasharray="5 4"/>
+              </g>
+              <g font-size="10.5" fill="currentColor" opacity=".75">
+                <text x="300" y="42" text-anchor="middle">評価に成功</text>
+                <text x="300" y="106" text-anchor="middle">評価に失敗</text>
+                <text x="300" y="168" text-anchor="middle">--all で全員をリセット（--retry-errors なら error のみ）</text>
+              </g>
+            </svg>
+            <figcaption>
+              <code>error</code> は<b>次回の自動実行では再処理されません</b>。同じ書類で何度も失敗し続けてコストを消費するのを避けるためです。
+              明示的に <code>--retry-errors</code> を付けたときだけ再試行されます。
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="errors">
+        <h3>エラー処理の方針</h3>
+        <p><b>1人の失敗で全体を止めない</b>のが基本方針です。失敗した応募者は記録に残し、残りの処理は続行します。</p>
+        <div class="tw">
+          <table>
+            <thead><tr><th>発生箇所</th><th>種類</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">browser/auth</td><td>ログイン失敗</td><td>処理中断＋失敗アラート送信。セッション失効は自動で再ログイン</td></tr>
+              <tr><td class="mono">browser/navigator</td><td>要素が見つからない</td><td>その応募者をスキップし警告ログ</td></tr>
+              <tr><td class="mono">browser/page_utils</td><td>ページ遷移の失敗</td><td>最大3回まで再試行</td></tr>
+              <tr><td class="mono">parser/document</td><td>解析失敗</td><td>空テキストを返し、その応募者をスキップ</td></tr>
+              <tr><td class="mono">evaluator</td><td>タイムアウト / API エラー</td><td>最大3回リトライ後スキップ（<code>status='error'</code>）</td></tr>
+              <tr><td class="mono">evaluator</td><td>JSONパース失敗</td><td>同上</td></tr>
+              <tr><td class="mono">reporter/notify</td><td>メール送信失敗</td><td>ログのみ。評価結果には影響しない</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <span class="lb">無音で失敗しない設計</span>
+          <p>一覧が0件だったときは画面と HTML を <code>data/debug/</code> に保存します。ログイン画面が写っていればセッション要因、一覧の構造が変わっていれば HRMOS の UI 変更（<code>selectors.py</code> の見直し）と切り分けられます。</p>
+        </div>
+      </section>
+
+      <section id="stack">
+        <h3>技術スタック</h3>
+        <div class="tw">
+          <table>
+            <thead><tr><th>領域</th><th>採用技術</th><th>選定理由</th></tr></thead>
+            <tbody>
+              <tr><td>言語</td><td class="mono">Python 3.13</td><td>書類パーサとブラウザ自動化の資産が揃っている</td></tr>
+              <tr><td>ブラウザ自動化</td><td class="mono">Playwright (Chromium)</td><td>セッション保存に対応し、HRMOSの2段階ログインを扱える</td></tr>
+              <tr><td>AI評価</td><td class="mono">Gemini REST API / Claude CLI</td><td>APIキー方式は追加ソフト・ログイン不要で無人実行に強い</td></tr>
+              <tr><td>書類パーサ</td><td class="mono">pdfplumber / python-docx / openpyxl</td><td>PDF・Word・Excel の3形式をカバー</td></tr>
+              <tr><td>データベース</td><td class="mono">SQLite</td><td>サーバ不要。ファイル1つで完結し配布しやすい</td></tr>
+              <tr><td>Excel出力</td><td class="mono">openpyxl</td><td>レーダーチャートとセル色を扱える</td></tr>
+              <tr><td>メール通知</td><td class="mono">Resend API</td><td>SMTP設定なしで送信でき、添付にも対応</td></tr>
+              <tr><td>設定管理</td><td class="mono">YAML ＋ 環境変数</td><td>認証情報をファイルに書かずに済ませられる</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>認証情報の置き場所</h4>
+        <p>インストーラで入力した認証情報は <code>config.yaml</code> ではなく <b>Windows のユーザー環境変数</b>に保存されます。フォルダごとコピーしても認証情報が一緒に持ち出されないようにするためです。</p>
+        <div class="tw">
+          <table>
+            <thead><tr><th>環境変数</th><th>上書きする設定</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">HRMOS_EMAIL</td><td class="mono">credentials.email</td></tr>
+              <tr><td class="mono">HRMOS_PASSWORD</td><td class="mono">credentials.password</td></tr>
+              <tr><td class="mono">GEMINI_API_KEY</td><td class="mono">evaluation.gemini_api_key</td></tr>
+              <tr><td class="mono">RESEND_API_KEY</td><td class="mono">email.api_key</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note warn">
+          <span class="lb">機密として扱うファイル</span>
+          <p><code>storage_state.json</code> は HRMOS のログイン済みセッションです。<b>これを持っているだけでパスワード無しでログインできてしまう</b>ため、配布物やバックアップに混入させないでください（配布zipの作成スクリプトは自動で除外します）。</p>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          HRMOS採用 応募者書類AI評価ツール — 全体像。
+          導入手順は同梱の <code>SETUP_GUIDE.html</code>、設定の変更は <code>SETUP_GUIDE.ADVANCED.html</code>、設定項目の全一覧は <code>config.yaml.example</code> のコメントを参照してください。
+        </p>
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('tg');
+  var root = document.documentElement;
+  try {
+    var saved = localStorage.getItem('ovw-theme');
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  btn.addEventListener('click', function () {
+    var cur = root.getAttribute('data-theme');
+    if (!cur) {
+      var d = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      cur = d ? 'dark' : 'light';
+    }
+    var next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('ovw-theme', next); } catch (e) {}
+  });
+})();
+</script>

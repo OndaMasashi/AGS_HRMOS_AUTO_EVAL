@@ -28,3 +28,11 @@ node_modules/
 Thumbs.db
 .DS_Store
 nul
+
+# 配布パッケージのビルド出力
+dist/
+setup/*.zip
+
+# ビルドの中間物や展開物が setup/ 配下に残った場合に取り込まないため
+setup/AGS_HRMOS_AUTO_EVAL/
+setup/*/

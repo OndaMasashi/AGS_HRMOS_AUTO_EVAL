@@ -12,7 +12,13 @@
       "mcp__chrome-devtools__list_console_messages",
       "mcp__chrome-devtools__evaluate_script",
       "Skill(code-review:code-review)",
-      "Skill(code-review:code-review:*)"
+      "Skill(code-review:code-review:*)",
+      "Bash(cat > *)",
+      "mcp__chrome-devtools__list_pages",
+      "Bash(mkdir -p \"/c/Users/MASASH~1.OND/AppData/Local/Temp/claude/c--work-AGS-HRMOS-AUTO-EVAL/73a6476d-0fa0-42da-b29e-773f746e48e1/scratchpad\" && echo ok)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\MASASH~1.OND\\AppData\\Local\\Temp\\claude\\c--work-AGS-HRMOS-AUTO-EVAL\\73a6476d-0fa0-42da-b29e-773f746e48e1\\scratchpad"
     ]
   }
 }

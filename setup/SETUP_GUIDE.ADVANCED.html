@@ -1,0 +1,467 @@
+<title>HRMOS評価ツール 設定ガイド</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+:root {
+  --paper:#F6F7F5; --surface:#FFFFFF; --surface-2:#EEF0EE;
+  --ink:#1B2024; --ink-2:#4A545B; --ink-3:#79848B;
+  --rule:#DCE0DD; --rule-2:#C6CCC7;
+  --accent:#2F6169; --accent-ink:#244E55; --accent-bg:#E4EDED;
+  --warn:#8A5B0B; --warn-bg:#FBF1DE; --warn-rule:#DFB760;
+  --danger:#A03A31; --danger-bg:#FBEAE7; --danger-rule:#D89189;
+  --good:#2C6448; --good-bg:#E4EFE8;
+  --shadow:0 1px 2px rgba(27,32,36,.05), 0 8px 22px -12px rgba(27,32,36,.18);
+  --display:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --body:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#14181A; --surface:#1B2023; --surface-2:#232A2D;
+    --ink:#E6EAE8; --ink-2:#A9B4B5; --ink-3:#7B8789;
+    --rule:#2C3437; --rule-2:#3C4649;
+    --accent:#6FB3B8; --accent-ink:#8FC9CD; --accent-bg:#1E2E31;
+    --warn:#D9A94E; --warn-bg:#2A2418; --warn-rule:#6B5628;
+    --danger:#E08A80; --danger-bg:#2C1D1B; --danger-rule:#6B3A34;
+    --good:#74B894; --good-bg:#1A2A22;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 22px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#14181A; --surface:#1B2023; --surface-2:#232A2D;
+  --ink:#E6EAE8; --ink-2:#A9B4B5; --ink-3:#7B8789;
+  --rule:#2C3437; --rule-2:#3C4649;
+  --accent:#6FB3B8; --accent-ink:#8FC9CD; --accent-bg:#1E2E31;
+  --warn:#D9A94E; --warn-bg:#2A2418; --warn-rule:#6B5628;
+  --danger:#E08A80; --danger-bg:#2C1D1B; --danger-rule:#6B3A34;
+  --good:#74B894; --good-bg:#1A2A22;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 22px -12px rgba(0,0,0,.6);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--body); font-size:16px; line-height:1.8;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap { max-width:940px; margin:0 auto; padding:0 24px 90px; }
+
+/* masthead */
+.masthead { padding:64px 0 30px; border-bottom:2px solid var(--ink); }
+.backlink {
+  display:inline-flex; align-items:center; gap:8px; font-size:13.5px;
+  color:var(--ink-3); text-decoration:none; margin-bottom:20px;
+  padding:5px 12px 5px 9px; border:1px solid var(--rule-2);
+  border-radius:2px; background:var(--surface);
+}
+.backlink:hover, .backlink:focus-visible { color:var(--accent-ink); border-color:var(--accent); }
+.eyebrow {
+  font-family:var(--mono); font-size:11.5px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 16px;
+}
+h1 {
+  font-family:var(--display); font-weight:900;
+  font-size:clamp(30px,5.2vw,44px); line-height:1.25;
+  margin:0 0 16px; text-wrap:balance;
+}
+.standfirst { font-size:16.5px; color:var(--ink-2); max-width:60ch; margin:0; }
+
+/* 開く前に */
+.pre {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule);
+  margin:34px 0 0;
+}
+.pre > div { background:var(--surface); padding:16px 18px; }
+.pre b { display:block; font-family:var(--display); font-size:14.5px; margin-bottom:4px; }
+.pre span { font-size:13.5px; color:var(--ink-2); line-height:1.7; }
+
+/* 索引 */
+.idx { margin:0 0 8px; }
+.idx h2 { border:none; padding:0; margin:0 0 6px; }
+.cards {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr));
+  gap:12px; margin:22px 0 0;
+}
+.card {
+  display:block; text-decoration:none; color:inherit;
+  background:var(--surface); border:1px solid var(--rule-2);
+  border-left:3px solid var(--accent); border-radius:0 3px 3px 0;
+  padding:15px 18px 16px; transition:box-shadow .15s, transform .15s;
+}
+.card:hover, .card:focus-visible { box-shadow:var(--shadow); transform:translateY(-1px); }
+.card b {
+  display:block; font-family:var(--display); font-weight:700;
+  font-size:15.5px; margin-bottom:5px; color:var(--accent-ink);
+}
+.card span { display:block; font-size:13.5px; color:var(--ink-2); line-height:1.65; }
+.cards .cd-x { border-left-color:var(--danger-rule); }
+.cards .cd-x b { color:var(--danger); }
+
+/* sections */
+section { margin-bottom:44px; scroll-margin-top:20px; }
+h2 {
+  font-family:var(--display); font-weight:700; font-size:23px;
+  line-height:1.4; margin:0 0 8px; padding-bottom:10px;
+  border-bottom:1px solid var(--rule-2); text-wrap:balance;
+}
+.task {
+  border-top:1px solid var(--rule); padding-top:26px; margin-top:26px;
+  scroll-margin-top:20px;
+}
+.task:first-of-type { border-top:none; padding-top:16px; margin-top:0; }
+.task h3 {
+  font-family:var(--display); font-weight:700; font-size:18.5px;
+  margin:0 0 12px; display:flex; align-items:baseline; gap:10px;
+}
+.task h3 .tn {
+  font-family:var(--mono); font-size:12px; color:var(--surface);
+  background:var(--accent); border-radius:2px; padding:2px 7px;
+  font-variant-numeric:tabular-nums; flex:none;
+}
+p { margin:0 0 14px; max-width:70ch; }
+main ul, main ol { max-width:68ch; padding-left:1.3em; margin:0 0 16px; }
+main li { margin-bottom:6px; }
+.lead { color:var(--ink-2); }
+
+/* callouts */
+.note {
+  border-left:3px solid var(--accent); background:var(--accent-bg);
+  padding:13px 17px; margin:0 0 18px; border-radius:0 3px 3px 0;
+  font-size:14.5px; line-height:1.75;
+}
+.note.warn { border-left-color:var(--warn-rule); background:var(--warn-bg); }
+.note.danger { border-left-color:var(--danger-rule); background:var(--danger-bg); }
+.note.good { border-left-color:var(--good); background:var(--good-bg); }
+.note > :last-child { margin-bottom:0; }
+.note p { max-width:none; margin-bottom:10px; }
+.note .label {
+  display:block; font-family:var(--mono); font-size:10.5px;
+  letter-spacing:.12em; text-transform:uppercase; margin-bottom:6px;
+  color:var(--accent-ink);
+}
+.note.warn .label { color:var(--warn); }
+.note.danger .label { color:var(--danger); }
+.note.good .label { color:var(--good); }
+
+/* tables */
+.tw { overflow-x:auto; margin:0 0 18px; border:1px solid var(--rule); border-radius:3px; background:var(--surface); }
+table { border-collapse:collapse; width:100%; font-size:14px; }
+th, td { text-align:left; padding:9px 14px; border-bottom:1px solid var(--rule); vertical-align:top; }
+th { background:var(--surface-2); font-family:var(--display); font-weight:700; font-size:12.5px; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+td.mono { font-family:var(--mono); font-size:12.5px; }
+
+/* code */
+code { font-family:var(--mono); font-size:.87em; background:var(--surface-2); padding:2px 6px; border-radius:2px; word-break:break-word; }
+pre {
+  font-family:var(--mono); font-size:13px; line-height:1.7;
+  background:var(--surface); border:1px solid var(--rule);
+  border-left:3px solid var(--rule-2); border-radius:0 3px 3px 0;
+  padding:14px 16px; overflow-x:auto; margin:0 0 18px;
+}
+pre code { background:none; padding:0; word-break:normal; }
+pre .dim { color:var(--ink-3); }
+pre .hi { color:var(--accent-ink); font-weight:700; }
+pre.bad { border-left-color:var(--danger-rule); }
+pre.ok { border-left-color:var(--good); }
+
+.cmp { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:14px; margin:0 0 18px; }
+.cmp > div { min-width:0; }
+.cmp h5 { font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; margin:0 0 6px; }
+.cmp .x h5 { color:var(--danger); }
+.cmp .o h5 { color:var(--good); }
+.cmp pre { margin:0; }
+
+.kbd { font-family:var(--mono); font-size:.85em; border:1px solid var(--rule-2); border-bottom-width:2px; border-radius:3px; padding:1px 6px; background:var(--surface); }
+a { color:var(--accent-ink); text-underline-offset:2px; }
+a:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+footer { border-top:2px solid var(--ink); margin-top:16px; padding-top:20px; font-size:13.5px; color:var(--ink-3); }
+.toggle {
+  position:fixed; top:16px; right:16px; font-family:var(--mono);
+  font-size:11px; letter-spacing:.1em; background:var(--surface);
+  color:var(--ink-2); border:1px solid var(--rule-2); border-radius:2px;
+  padding:7px 11px; cursor:pointer; z-index:20;
+}
+.toggle:hover { color:var(--accent-ink); border-color:var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+
+<button class="toggle" id="tg" aria-label="表示テーマを切り替える">THEME</button>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <a class="backlink" href="SETUP_GUIDE.html">&larr;&nbsp; 導入ガイドに戻る</a>
+    <p class="eyebrow">Configuration Guide</p>
+    <h1>評価の中身を変える</h1>
+    <p class="standfirst">
+      評価項目・面接質問・1次通過ラインは、<code>config.yaml</code> をメモ帳で編集するだけで変えられます。
+      やりたいことを下から選んでください。
+    </p>
+
+    <div class="pre">
+      <div>
+        <b>編集するファイル</b>
+        <span><code>config.yaml</code><br>ツールのフォルダ直下（<code>run.py</code> と同じ場所）</span>
+      </div>
+      <div>
+        <b>始める前に</b>
+        <span>コピーを取って <code>config.yaml.backup</code> として残す</span>
+      </div>
+      <div>
+        <b>保存は上書きのみ</b>
+        <span><span class="kbd">Ctrl</span>+<span class="kbd">S</span> を使う。「名前を付けて保存」は <code>.txt</code> が付いて反映されません</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <section class="idx" id="index">
+      <div class="cards">
+        <a class="card" href="#t1"><b>評価項目を増やしたい</b><span>「英語力」など新しい観点を足す</span></a>
+        <a class="card" href="#t2"><b>評価項目を減らしたい</b><span>使っていない観点を外す</span></a>
+        <a class="card" href="#t3"><b>点の付け方を変えたい</b><span>評価が甘い／辛いと感じるとき</span></a>
+        <a class="card" href="#t4"><b>1次通過候補の数を調整したい</b><span>○が多すぎる／少なすぎる</span></a>
+        <a class="card" href="#t5"><b>面接質問を変えたい</b><span>質問の観点や数を指定する</span></a>
+        <a class="card" href="#t6"><b>過去の人も評価し直したい</b><span>基準を変えた後、物差しを揃える</span></a>
+        <a class="card" href="#t7"><b>メールの宛先を増やしたい</b><span>通知を受け取る人を追加する</span></a>
+        <a class="card" href="#t8"><b>経歴書の添付をやめたい</b><span>メールに個人情報を載せない</span></a>
+        <a class="card" href="#t9"><b>ブラウザを表示したくない</b><span>裏で静かに実行する</span></a>
+        <a class="card cd-x" href="#fix"><b>保存したら動かなくなった</b><span>エラーの読み方と元に戻す手順</span></a>
+      </div>
+    </section>
+
+    <section id="tasks">
+      <h2>手順</h2>
+
+      <!-- 1 -->
+      <div class="task" id="t1">
+        <h3><span class="tn">1</span>評価項目を増やしたい</h3>
+        <p><code>evaluation_criteria:</code> の一番下に、2行セットで追加します。<b>既存の行をコピーして中身を書き換える</b>のが確実です。</p>
+<pre><code>evaluation_criteria:
+  - name: "自己学習・成長意欲"
+    description: "自己学習として業務以外で何か意欲的に..."
+<span class="hi">  - name: "英語力"</span>
+<span class="hi">    description: "TOEICスコア、海外案件の経験、英語での業務経験の有無と深さ"</span></code></pre>
+        <p><code>name</code> が Excel の列名、<code>description</code> が AI への指示です。項目数に上限はありません。</p>
+        <div class="note">
+          <span class="label">書類に書かれていないことは評価できません</span>
+          <p>AI が見るのは提出書類だけです。「人柄」「熱意」のように書類に痕跡が残らないものを項目にすると、ほぼ全員が最低点になります。</p>
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="task" id="t2">
+        <h3><span class="tn">2</span>評価項目を減らしたい</h3>
+        <p>その項目の <b>2行をまとめて</b>削除します。<code>name</code> だけ消して <code>description</code> を残すとエラーになります。</p>
+        <div class="cmp">
+          <div class="x">
+            <h5>&times; 片方だけ消した</h5>
+<pre class="bad"><code>  - name: "設計経験"
+    description: "IT開発の上流工程..."
+    description: "資格の有無..."</code></pre>
+          </div>
+          <div class="o">
+            <h5>&#10003; 2行セットで消す</h5>
+<pre class="ok"><code>  - name: "設計経験"
+    description: "IT開発の上流工程..."</code></pre>
+          </div>
+        </div>
+        <p>最低1項目は必要です。全部消すと動きません。</p>
+      </div>
+
+      <!-- 3 -->
+      <div class="task" id="t3">
+        <h3><span class="tn">3</span>点の付け方を変えたい</h3>
+        <p>点数を決めているのは <code>description</code> です。<b>「何を見るか」に加えて「どういう場合に下げるか」まで書く</b>と、応募者ごとのばらつきが減ります。</p>
+        <div class="cmp">
+          <div class="x">
+            <h5>&times; 判断がぶれる</h5>
+<pre class="bad"><code>- name: "コミュニケーション力"
+  description: "コミュニケーション能力"</code></pre>
+          </div>
+          <div class="o">
+            <h5>&#10003; 判断が安定する</h5>
+<pre class="ok"><code>- name: "コミュニケーション力"
+  description: "顧客折衝・社内調整の経験。
+    提案や合意形成を主導した記述があれば
+    高く評価する。担当作業の記述のみで
+    対人の役割が読み取れない場合は下げる"</code></pre>
+          </div>
+        </div>
+        <p>全項目に共通で効かせたい指示は <code>evaluation.system_instructions</code> に書きます（例:「書類に明記された事実のみを根拠にする」）。</p>
+      </div>
+
+      <!-- 4 -->
+      <div class="task" id="t4">
+        <h3><span class="tn">4</span>1次通過候補の数を調整したい</h3>
+        <p>年齢帯ごとに「平均点が何点以上なら ○ にするか」を決めています。<b>0.2〜0.3 ずつ動かして調整</b>してください。</p>
+<pre><code>first_pass_criteria:
+  - age_range: [25, 29]
+    min_avg_score: 2.4   <span class="dim"># 下げると○が増える / 上げると減る</span></code></pre>
+        <div class="tw">
+          <table>
+            <thead><tr><th>平均点</th><th>判定</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">min_avg_score 以上</td><td><b>○</b>（候補。メール通知にも載る）</td></tr>
+              <tr><td class="mono">その 0.3 点手前まで</td><td><b>△</b>（目視で確認したい層）</td></tr>
+              <tr><td class="mono">それ未満</td><td>空欄</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note good">
+          <span class="label">再評価は不要です</span>
+          <p>これは線引きを変えるだけなので、<code>run.py report</code> で Excel を出し直せば既存の評価にすぐ反映されます。AIの費用もかかりません。</p>
+        </div>
+        <div class="note warn">
+          <span class="label">空欄になる2つのケース</span>
+          <p>どの <code>age_range</code> にも入らない年齢（例: 55歳以上）と、<b>書類から年齢を読み取れなかった応募者</b>は、点数に関わらず空欄になります。対象を広げたいときは年齢帯の行を追加してください。</p>
+        </div>
+      </div>
+
+      <!-- 5 -->
+      <div class="task" id="t5">
+        <h3><span class="tn">5</span>面接質問を変えたい</h3>
+        <p><code>count</code> が質問の数、<code>perspective</code> が「何を確かめたいか」です。中身は普通の日本語で構いません。</p>
+<pre><code>interview_questions:
+  count: 3
+  perspective: |
+    応募者の自律性や自己成長意欲を確認する質問。
+    35歳以上であれば、マネジメント面の素養を問う質問。</code></pre>
+        <p><code>|</code> は「次の行から複数行が続く」という印です。<b>各行の行頭の空白は揃えて</b>ください。<code>count</code> を変えると Excel の質問候補の列数も変わります。</p>
+      </div>
+
+      <!-- 6 -->
+      <div class="task" id="t6">
+        <h3><span class="tn">6</span>過去の応募者も評価し直したい</h3>
+        <div class="note danger">
+          <span class="label">評価項目を変えても、評価済みの人は自動では変わりません</span>
+          <p>これ以降に評価される人だけが新しい基準になるため、<b>同じ Excel に古い基準の人と新しい基準の人が混在します</b>。物差しを揃えるには全員の再評価が必要です。</p>
+        </div>
+        <p>まず対象が何人いるかを確認します。</p>
+<pre><code>.venv\Scripts\python.exe run.py status</code></pre>
+        <p>そのうえで全員を再評価します。</p>
+<pre><code>.venv\Scripts\python.exe run.py scan --all</code></pre>
+        <div class="note warn">
+          <span class="label">実行前に</span>
+          <p>登録済みの応募者を<b>全員もう一度処理</b>します。件数によっては数時間かかり、HRMOS へも同じ回数アクセスします。AI の利用料も人数分かかります。<b>終業後や休日に実行してください。</b></p>
+        </div>
+      </div>
+
+      <!-- 7 -->
+      <div class="task" id="t7">
+        <h3><span class="tn">7</span>メールの宛先を増やしたい</h3>
+<pre><code>email:
+  to:
+    - "saiyo@example.com"
+<span class="hi">    - "bucho@example.com"</span></code></pre>
+        <p><code>-</code> の前の空白は上の行と同じだけ空けてください。メール通知をまだ有効にしていない場合は、<a href="SETUP_GUIDE.html#mail">導入ガイドのメール通知の章</a>を先に済ませてください。</p>
+        <div class="note warn">
+          <span class="label">宛先を増やす前に</span>
+          <p><code>attach_resumes: true</code> のままだと、<b>経歴書も宛先全員に届きます</b>（次項）。</p>
+        </div>
+      </div>
+
+      <!-- 8 -->
+      <div class="task" id="t8">
+        <h3><span class="tn">8</span>経歴書の添付をやめたい</h3>
+<pre><code>email:
+  attach_resumes: <span class="hi">false</span>   <span class="dim"># true だと1次通過候補(○)の経歴書が添付される</span></code></pre>
+        <div class="note danger">
+          <span class="label">添付される経歴書は伏字ではありません</span>
+          <p>AI に送るときだけ氏名・電話・住所を伏字にしており、<b>原本には手を加えていません</b>。宛先を増やすほど個人情報が渡る範囲も広がります。社内の取り扱いルールを確認して判断してください。</p>
+        </div>
+      </div>
+
+      <!-- 9 -->
+      <div class="task" id="t9">
+        <h3><span class="tn">9</span>ブラウザを表示したくない</h3>
+<pre><code>scan:
+  headless: <span class="hi">true</span>    <span class="dim"># true で画面を出さずに裏で実行する</span></code></pre>
+        <p>自動実行にしている場合は <code>true</code> が向いています。うまく動かないときの原因調査には <code>false</code> にして画面を見るのが有効です。</p>
+        <div class="note warn">
+          <span class="label">触らない方がよい項目</span>
+          <p><code>wait_between_pages</code>（既定 2秒）は HRMOS への負荷を抑えるための待ち時間です。<b>短くしないでください。</b></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="fix">
+      <h2>保存したら動かなくなったとき</h2>
+      <p class="lead">まず、どこが悪いかを確認します。AI は呼ばないので費用はかかりません。</p>
+<pre><code>.venv\Scripts\python.exe run.py doctor --skip-llm</code></pre>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>表示されるメッセージ</th><th>原因</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">YAMLとして読めません</td><td><b>行頭の空白がずれている</b>か、<b>全角スペースが混ざっている</b>。行番号が出るのでその付近を確認</td></tr>
+            <tr><td class="mono">N 番目に name と description が必要です</td><td>項目を消したときに片方だけ残っている</td></tr>
+            <tr><td class="mono">evaluation_criteria が未設定です</td><td>項目を全部消してしまっている（最低1つ必要）</td></tr>
+            <tr><td class="mono">内容が空です</td><td>ファイルが空になっている</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="font-family:var(--display);font-weight:700;font-size:17px;margin:26px 0 10px">崩れやすい3か所</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>原因</th><th>対処</th></tr></thead>
+          <tbody>
+            <tr><td><b>行頭の空白</b></td><td>元の行と同じ数だけ字下げする。増減させない</td></tr>
+            <tr><td><b>全角スペース</b></td><td>字下げするときは日本語入力をオフ（<span class="kbd">半角/全角</span>）にする</td></tr>
+            <tr><td><b>引用符の閉じ忘れ</b></td><td>説明文は必ず <code>"</code> で囲む。<code>:</code> や <code>#</code> を含む文は囲まないと途中で切れる</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="font-family:var(--display);font-weight:700;font-size:17px;margin:26px 0 10px">元に戻す</h3>
+      <p><b>バックアップがある場合</b>は、それを <code>config.yaml</code> に戻すだけです。ない場合は次の手順で作り直せます。</p>
+      <ol>
+        <li>壊れた <code>config.yaml</code> の名前を <code>config.yaml.broken</code> に変える（消さない）</li>
+        <li><code>config.yaml.example</code> をコピーし、名前を <code>config.yaml</code> にする</li>
+        <li><code>setup\install.bat</code> を実行し直す（AIの設定が書き戻ります）</li>
+        <li>壊れたファイルを見ながら、自分の変更を少しずつ入れ直す</li>
+      </ol>
+      <div class="note good">
+        <span class="label">評価済みのデータは消えません</span>
+        <p><code>config.yaml</code> を作り直しても、これまでの評価結果は別ファイルに保存されているため残ります。</p>
+      </div>
+    </section>
+
+    <footer>
+      <p>
+        HRMOS採用 応募者書類AI評価ツール &mdash; 設定ガイド。
+        導入手順は <a href="SETUP_GUIDE.html">SETUP_GUIDE.html</a>、
+        機能と仕組みは <a href="OVERVIEW.html">OVERVIEW.html</a>、
+        設定項目の全一覧は <code>config.yaml.example</code> のコメントを参照してください。
+      </p>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('tg');
+  var root = document.documentElement;
+  try {
+    var saved = localStorage.getItem('guide-theme');
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  btn.addEventListener('click', function () {
+    var cur = root.getAttribute('data-theme');
+    if (!cur) {
+      var d = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      cur = d ? 'dark' : 'light';
+    }
+    var next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('guide-theme', next); } catch (e) {}
+  });
+})();
+</script>

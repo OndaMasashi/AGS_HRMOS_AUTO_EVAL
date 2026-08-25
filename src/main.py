@@ -32,6 +32,13 @@ logger = logging.getLogger(__name__)
 # （実行時CWDに依存させないため）。
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+# ログ表示用のプロバイダー名（config の provider 値 → 人が読む名前）
+PROVIDER_LABELS = {
+    "claude": "Claude CLI",
+    "gemini_api": "Gemini API",
+    "gemini": "Gemini CLI",
+}
+
 
 def _resolve_download_path(file_path: str) -> Path:
     """書類のローカルパスを絶対化する（相対パスはプロジェクトルート基準で解決）"""
@@ -259,7 +266,7 @@ async def run_scan(config_path: str = "config.yaml", rescan_all: bool = False, r
                     )
 
                     provider = config.get("evaluation", {}).get("provider", "claude")
-                    logger.info(f"  {provider.capitalize()} CLIで評価中...")
+                    logger.info(f"  {PROVIDER_LABELS.get(provider, provider)}で評価中...")
                     raw_response = call_llm(prompt, config)
 
                     evaluation_data = parse_evaluation_response(raw_response, criteria_names)

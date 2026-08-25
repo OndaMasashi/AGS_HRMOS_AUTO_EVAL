@@ -4,12 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-HRMOS採用ページから応募者書類（PDF/Word/Excel）を自動取得し、Claude CLI / Gemini CLIでAI評価・スコアリングを行い、Excelレポートを出力するCLI自動化ツール。Windows 10/11 + Python 3.10+ 環境で動作する。
+HRMOS採用ページから応募者書類（PDF/Word/Excel）を自動取得し、Gemini API または Claude CLI でAI評価・スコアリングを行い、Excelレポートを出力するCLI自動化ツール。Windows 10/11 + Python 3.10+ 環境で動作する。社内の同僚PCへ zip で配布して使う。
 
 ## Commands
 
 ```bash
-# セットアップ
+# セットアップ（配布先・開発機とも setup\install.bat が正）
+setup\install.bat          # Python導入〜venv〜依存〜Chromium〜設定〜自己診断まで一括
+
+# 手動セットアップ
 python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements.txt
 playwright install chromium
@@ -17,22 +20,31 @@ playwright install chromium
 # 日常運用（書類DL → AI評価 → Excel出力）
 python run.py scan
 
-# 全応募者を再評価（評価基準変更時）
+# 全応募者を再評価（評価基準変更時。HRMOSへ人数分アクセスするため要注意）
 python run.py scan --all
 
 # エラー応募者のリトライ
 python run.py scan --retry-errors
 
-# DB内の評価結果をExcel再出力（評価なし）
+# DB内の評価結果をExcel再出力（評価なし・AI呼び出しなし）
 python run.py report
 python run.py report --run-id <uuid>
 
 # 進捗確認
 python run.py status
 
+# 環境の自己診断（9項目。--skip-llm でAI呼び出しを省略）
+python run.py doctor
+python run.py doctor --skip-llm
+
 # デバッグログ
 python run.py -v scan
+
+# 配布パッケージの作成（setup/ に zip を出力）
+powershell -ExecutionPolicy Bypass -File setup\build_dist.ps1
 ```
+
+AI を呼び出すのは `scan` と `doctor`（`--skip-llm` なし）のみ。`report` / `status` / `doctor --skip-llm` は課金が発生しない。
 
 テストは `tests/test_pii_masker.py`（pytest ベース、PII マスキングのユニットテスト）のみ。ただし pytest は `requirements.txt` に含まれず `.venv` にも未導入のため、現状そのままでは実行できない（`pip install pytest` が必要）。
 
@@ -43,21 +55,35 @@ python run.py -v scan
 ```
 CLI (run.py: argparse)
   └→ main.py: run_scan() / run_report() / show_status()
-       ├→ browser/   : Playwright によるHRMOSログイン・応募者一覧巡回・添付DL
-       ├→ parser/    : PDF(pdfplumber) / DOCX(python-docx) / XLSX(openpyxl) → テキスト
-       ├→ evaluator/ : PII マスキング → プロンプト構築 → LLM CLI subprocess → JSON パース
-       ├→ database/  : SQLite (Repository パターン)
-       └→ reporter/  : Excel 出力（レーダーチャート・ランク色付き）+ Resend メール通知（評価結果サマリ・新規0件通知・失敗アラート）
+  |    ├→ browser/   : Playwright によるHRMOSログイン・応募者一覧巡回・添付DL
+  |    ├→ parser/    : PDF(pdfplumber) / DOCX(python-docx) / XLSX(openpyxl) → テキスト
+  |    ├→ evaluator/ : PII マスキング → プロンプト構築 → LLM 呼び出し → JSON パース
+  |    ├→ database/  : SQLite (Repository パターン)
+  |    └→ reporter/  : Excel 出力（レーダーチャート・ランク色付き）+ Resend メール通知（評価結果サマリ・新規0件通知・失敗アラート）
+  └→ doctor.py: 環境の自己診断（各層を横断して「実際に使えるか」を検証）
 ```
+
+`setup/` は導入・配布のためのスクリプトと利用者向けドキュメント一式（本体コードではない）。
 
 ### LLM呼び出しの仕組み
 
-APIキー不要。`subprocess.run()` で Claude CLI (`claude -p`) または Gemini CLI を呼び出す。stdin にプロンプトを送信し、stdout から JSON 応答を受け取る。`config.yaml` の `evaluation.provider` で切替。
+`config.yaml` の `evaluation.provider` で3方式を切り替える。既定は `gemini_api`。
 
-- PII マスキング (`pii_masker.py`): LLM送信前に氏名・電話・住所をマスク、応答後にアンマスク
+| provider | 実装 | 認証 | 備考 |
+|---|---|---|---|
+| `gemini_api` | `gemini_api_client.py` | 環境変数 `GEMINI_API_KEY` | REST API を urllib で直接呼ぶ。CLI・Node.js 不要で無人実行に強い。**既定** |
+| `claude` | `claude_client.py` | Claude CLI の対話ログイン | `subprocess.run(["claude","-p"])`。npm 版は `claude.cmd` になり CreateProcess が解決できないため **ネイティブ版（`claude.exe`）が必要** |
+| `gemini` | `gemini_client.py` | Gemini CLI | **非推奨**。個人アカウント向け提供は 2026-06-18 に終了 |
+
+- PII マスキング (`pii_masker.py`): LLM送信前に氏名・電話・住所をマスク、応答後にアンマスク。**職歴・所属企業名・資格はマスクしない**（評価に必要なため）
 - リトライ: 最大3回（`max_retries`）、タイムアウト300秒
-- テキスト切り詰め: 80,000文字上限
+- テキスト切り詰め: 80,000文字上限（`claude_client.MAX_TEXT_CHARS` のハードコード。`config.yaml` の `max_text_chars` は参照されていない）
 - Claude CLI 呼び出し時は環境変数 `CLAUDECODE` を除去（ネストセッション防止）
+- LLM を呼ぶ箇所はコード全体で `main.py`（評価）と `doctor.py`（疎通確認）の2箇所のみ
+
+### 設定の検証
+
+`config.py` の `validate_config()` / `normalize_config()` が唯一の検証箇所。`load_config()` と `doctor.py` の両方から呼ぶ。**doctor が OK なのに scan が落ちる状態を作らないため、検証ロジックをここ以外に書かないこと。**
 
 ### データベース（SQLite）
 
@@ -72,7 +98,9 @@ APIキー不要。`subprocess.run()` で Claude CLI (`claude -p`) または Gemi
 `config.yaml`（`.gitignore` 対象、テンプレートは `config.yaml.example`）:
 - `credentials`: HRMOS ログイン情報（環境変数 `HRMOS_EMAIL` / `HRMOS_PASSWORD` で上書き可）
 - `evaluation_criteria`: 評価基準リスト（name + description）。項目数・内容は自由に変更可
-- `evaluation.provider`: `"claude"` or `"gemini"`
+- `evaluation.provider`: `"gemini_api"`（既定）/ `"claude"` / `"gemini"`（非推奨）
+- `evaluation.model`: `gemini_api` のときのモデル。既定 `gemini-3.5-flash-lite`（同単価の `gemini-2.5-flash` より実測で約5倍速く、既存評価との一致度も高い）
+- `evaluation.gemini_api_key`: 環境変数 `GEMINI_API_KEY` での指定を推奨
 - `first_pass_criteria`: 年齢帯×平均点閾値による1次通過判定
 - `interview_questions.perspective`: 面接質問生成の観点
 - `email.attach_resumes`: `true`（デフォルト）で1次通過候補(○)の経歴書をメール添付。経歴書はマスクなしPIIを含むため運用注意
@@ -86,3 +114,8 @@ APIキー不要。`subprocess.run()` で Claude CLI (`claude -p`) または Gemi
 - CSSセレクタ: HRMOS ページの要素セレクタは `browser/selectors.py` に集約。UI変更時はここを修正
 - ページ遷移: `page.goto()` を直接呼ばず `browser/page_utils.py` の `goto_with_retry()` を使う。`wait_until="networkidle"` の一発勝負は一時的な遅延で実行全体を落とすため、遷移は `domcontentloaded` で成立させ、`networkidle` は未到達でも続行する扱いにしている（遷移失敗のみ最大3回試行＝初回＋リトライ2回）。描画完了が必須の箇所は `ready_selector` で要素の出現を待つ
 - 改修履歴: `improvement_list/` に `YYYY-MM-DD_{説明}.md` 形式で記録。未対応タスクは `ROADMAP.md` の上部に残す
+- 認証情報: `config.yaml` に平文で書かない。`install.bat` は Windows のユーザー環境変数（`HRMOS_EMAIL` / `HRMOS_PASSWORD` / `GEMINI_API_KEY`）に保存する。フォルダごとコピーしても持ち出されないようにするため
+- スクリプトの文字コード: `.bat` は**純ASCII + CRLF**（cmd.exe は OEM コードページで読むため日本語は文字化けする）、`.ps1` は **UTF-8 BOM + CRLF**。日本語メッセージは必ず `.ps1` 側に置く
+- PowerShell は **Windows PowerShell 5.1** 前提（配布先に PS7 は無い）。`&&` / `??` / 三項演算子は使えない。`$ErrorActionPreference='Stop'` 下ではネイティブコマンドの stderr が致命的エラーになるため、外部コマンドは `Invoke-Native` で包む
+- 配布: `setup/build_dist.ps1` で作る。手作業で zip 化しない。ビルド時に「機密の中身スキャン・入れ子の複製検出・件数チェック・必須ファイルの入れ忘れ検知・HTMLへの `<head>` 付与」が走る
+- 利用者向けドキュメントは `setup/` の3つのHTML（`SETUP_GUIDE.html` / `SETUP_GUIDE.ADVANCED.html` / `OVERVIEW.html`）が正。`README.md` は開発者向けで**配布物には含めない**。Artifact 公開用に `<title>` から始まる断片で保存しており、`<head>` はビルド時に付与される
