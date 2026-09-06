@@ -143,6 +143,7 @@ python run.py scan
 | -------------------------------------- | ------------------------------------------ | ---------------------------- |
 | `python run.py scan`                 | AI評価実行＋Excelレポート自動出力          | **日常はこれだけ実行** |
 | `python run.py scan --all`           | 全応募者を再評価（評価済みも含む）         | 評価基準変更時など           |
+| `python run.py scan --dry-run`       | HRMOSへの自動NG登録をせず対象者だけ確認      | 自動NG登録の設定を変えた直後 |
 | `python run.py report`               | DB内の過去全件の評価結果をExcel出力        | 過去データの再出力           |
 | `python run.py report --run-id <ID>` | 特定回の評価結果のみExcel出力              | 特定回の結果だけ欲しいとき   |
 | `python run.py status`               | 評価進捗状況を表示                         | 処理状況の確認               |
@@ -215,6 +216,39 @@ email:
 
 経歴書添付は `attach_resumes: true`（デフォルト）かつ○候補が存在する評価結果メールの場合のみ。
 
+## HRMOSへの自動NG評価登録 - オプション（既定OFF）
+
+> **この機能は初期状態で無効です。** 有効にすると、1次通過候補が「○」にならなかった応募者について、HRMOSの応募者ページで「選考を評価」→ NG →コメント入力→「評価を登録」までを自動で行います。
+
+**【重要】AI各社の利用規約は採用選考を高リスク用途とし、有資格者による事前レビューを要件としています。** 有効にすると人が書類を見ないまま不合格が確定します。**登録した評価はHRMOSの選考タイムラインに残り、画面上に取り消しの導線はありません**（2026-09-06 実機確認）。有効化は社内の採用責任者の承認を得たうえで、登録済みの応募者を定期的に人が確認する運用とセットにしてください。
+
+### 設定
+
+```yaml
+hrmos_evaluation:
+  enabled: false        # true で有効化
+  dry_run: true         # true: 登録の直前まで操作してログに出すだけ（登録しない）
+  max_per_run: 20       # 1回の実行で登録する上限件数（設定ミス時の大量登録を防ぐ）
+  max_age_days: 3       # 応募日時がこの日数以内の応募者だけを対象にする
+  comment: "自動評価"   # 総合評価コメント欄に入れる文言
+```
+
+**初めて有効にするときは `dry_run: true` のまま1回実行**し、ログとメールに出る内訳が想定どおりかを確認してから `false` にしてください。`python run.py scan --dry-run` でも同じことができます（config が `false` でも登録しません）。
+
+### 対象にならない応募者
+
+| 状況 | 記録 | 再実行時 |
+|---|---|---|
+| 1次通過候補が「○」 | なし | 毎回判定 |
+| 年齢を読めない／年齢帯の設定範囲外（判定不能） | なし | 毎回判定 |
+| 応募日時が `max_age_days` より古い | `too_old` | スキップ |
+| 「選考を評価」が押せない（既に誰かが評価済み・選考が締切） | `no_form` | スキップ |
+| 登録できたか確認できなかった | `submit_uncertain` | **スキップ**（二重登録の防止） |
+
+**年齢から判定できない応募者は登録しません。** 点数を見ずに落とさないための仕組みで、Excelでは「？」と表示されます。`first_pass_criteria` の年齢帯に隙間があるとここに落ちるため、`run.py doctor` が警告します。
+
+`run.py scan --all`（全応募者の再評価）では登録を行いません。結果は `applicants.hrmos_eval_status` に記録され、実行ごとの内訳はログとメール本文に1行で出ます。
+
 ## タスクスケジューラ（自動実行）
 
 `setup\setup_scheduler.bat` を実行すると、平日 12:30 と 17:30 に `run_scan.bat` を実行するタスクが登録されます。`setup\install.bat` の途中でも登録できます。実行ログは `data/logs/scan_YYYYMMDD_HHMMSS.log` に残ります。
@@ -270,7 +304,7 @@ foreach ($n in 'HRMOS_AutoEval_1230','HRMOS_AutoEval_1730') {
 | レポート（Excel） | `data/reports/ai_evaluation_*.xlsx`   | AI評価結果（マトリクス形式、スタイル付き） |
 | データベース      | `data/hrmos.db`                       | 評価履歴・応募者情報（SQLite）         |
 | ダウンロード書類  | `data/downloads/<応募者ID>/`          | PDF/Word/Excel原本                     |
-| 診断アーティファクト | `data/debug/applicant_list_empty_*.png/.html` | 応募者0件など異常時の画面・HTML（原因切り分け用） |
+| 診断アーティファクト | `data/debug/*.png/.html` | 異常時の画面・HTML（原因切り分け用）。応募者0件は `applicant_list_empty_*`、自動NG登録の失敗は `ng_*`。**`ng_*` は応募者詳細ページをそのまま保存するため氏名・連絡先・経歴を含む。原因を確認したら削除すること**（自動削除はしない） |
 
 ## プロジェクト構成
 
@@ -299,7 +333,8 @@ AGS_HRMOS_AUTO_EVAL/
 │   ├── doctor.py           # 環境自己診断（run.py doctor）
 │   ├── browser/
 │   │   ├── auth.py         # HRMOS認証（2段階ログイン・セッション有効性判定）
-│   │   ├── navigator.py    # 応募者一覧巡回・ダウンロード
+│   │   ├── navigator.py    # 応募者一覧巡回・ダウンロード（読み取りのみ）
+│   │   ├── evaluation_form.py # 自動NG評価の登録（HRMOSへの書き込みはここだけ）
 │   │   ├── page_utils.py   # ページ遷移の共通処理（リトライ付き）
 │   │   └── selectors.py    # ページ要素のセレクタ定義
 │   ├── parser/

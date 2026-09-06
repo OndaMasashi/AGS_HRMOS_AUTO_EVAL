@@ -45,6 +45,11 @@ def main():
         "--retry-errors", action="store_true", dest="retry_errors",
         help="エラー状態の応募者も再評価対象に含める"
     )
+    scan_parser.add_argument(
+        "--dry-run", action="store_true", dest="dry_run",
+        help="HRMOSへの評価登録を行わず、対象者をログに出すだけにする"
+             "（config の hrmos_evaluation.dry_run が false でも登録しない）"
+    )
 
     # report コマンド
     report_parser = subparsers.add_parser("report", help="AI評価結果をExcelに出力")
@@ -80,7 +85,9 @@ def main():
     from src.main import run_scan, run_report, show_status
 
     if args.command == "scan":
-        asyncio.run(run_scan(args.config, args.rescan_all, args.retry_errors))
+        asyncio.run(
+            run_scan(args.config, args.rescan_all, args.retry_errors, args.dry_run)
+        )
 
     elif args.command == "report":
         run_report(args.config, args.run_id)

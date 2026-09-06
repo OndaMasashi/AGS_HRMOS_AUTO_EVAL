@@ -6,7 +6,7 @@ from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
-from src.evaluator.prompt_builder import total_to_rank, is_first_pass_candidate
+from src.evaluator.prompt_builder import total_to_rank, classify_first_pass
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,7 @@ def export_evaluation_excel(
     question_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
     candidate_fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
     near_candidate_fill = PatternFill(start_color="FFFACD", end_color="FFFACD", fill_type="solid")  # 薄黄
+    undetermined_fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")  # 薄灰
     thin_border = Border(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
@@ -160,17 +161,30 @@ def export_evaluation_excel(
         # 平均点・1次通過候補の計算
         criteria_count = len(criteria_names)
         avg_score = round(app_data["total_score"] / criteria_count, 1) if criteria_count > 0 else 0
-        candidate_mark = is_first_pass_candidate(avg_score, age_val, first_pass_criteria or [])
+        candidate_mark = classify_first_pass(avg_score, age_val, first_pass_criteria or [])
 
-        # 1次通過候補
-        candidate_cell = ws.cell(row=row_idx, column=COL_CANDIDATE, value=candidate_mark)
+        # 1次通過候補（○ / △ / × / ？）。
+        # 空文字は「年齢を読み取れなかった・年齢帯の設定範囲外で判定できなかった」で、
+        # 不合格(×)とは意味が違う。同じ空欄にすると人が見落とすため別の印にする。
+        # セル自体を応募者ページへのリンクにして、○ 以外もすぐ開けるようにする。
+        display_mark = candidate_mark if candidate_mark else "？"
+        candidate_cell = ws.cell(row=row_idx, column=COL_CANDIDATE, value=display_mark)
         candidate_cell.alignment = Alignment(horizontal="center", vertical="center")
         candidate_cell.border = thin_border
-        candidate_cell.font = Font(bold=True, size=14)
+
+        page_url = app_data.get("page_url")
+        if page_url:
+            candidate_cell.hyperlink = page_url
+            candidate_cell.font = Font(bold=True, size=14, color="0563C1", underline="single")
+        else:
+            candidate_cell.font = Font(bold=True, size=14)
+
         if candidate_mark == "○":
             candidate_cell.fill = candidate_fill
         elif candidate_mark == "△":
             candidate_cell.fill = near_candidate_fill
+        elif candidate_mark == "":
+            candidate_cell.fill = undetermined_fill
 
         # 平均点
         avg_cell = ws.cell(row=row_idx, column=COL_AVG, value=avg_score)

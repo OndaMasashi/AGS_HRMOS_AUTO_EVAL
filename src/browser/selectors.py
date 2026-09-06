@@ -41,3 +41,37 @@ class ApplicantDetailSelectors:
     RESUME_SECTION_LINK_TEXT = "履歴書・職務経歴書の確認"
     # ダウンロードアイコン（空テキストのリンク）
     DOWNLOAD_LINK_ROLE = "link"
+
+    # --- 応募日時（自動NG登録の対象期間の判定に使う） ---
+    # 画面上は「応募日時  2026/9/1 18:22」の形で出る。ラベルと値のDOM構造は
+    # HRMOS 側の変更で崩れやすいため、要素を指さずページテキストから正規表現で
+    # 抜き出す（抽出は evaluation_form.parse_applied_at）。
+    APPLIED_AT_LABEL_TEXT = "応募日時"
+
+    # --- 選考評価フォーム（書き込み系。自動NG登録でのみ使う） ---
+    # 2026-09-06 に実機のDOMを採取して確定した値。HRMOS は Angular Material 製で、
+    # 評価フォームは応募者ページ内に展開される（別ウィンドウではない）。
+    #
+    # フォームを開くボタン: <a hrm-button class="sg-button"> 選考を評価 </a>
+    # button 要素ではなくアンカーで、role="button" が付かない。そのため
+    # get_by_role("button") では引けず、テキストか下のCSSで探す必要がある。
+    # 既に自分が評価を入力した応募者では disabled 属性が付いて押せなくなる。
+    EVALUATE_BUTTON_NAME = "選考を評価"
+    EVALUATE_BUTTON_CSS = "a.sg-button, button.sg-button"
+
+    # 総合評価のラジオ: <mat-radio-button> の中に
+    #   <input type="radio" name="mat-radio-group-0" value="NG"> が入る。
+    # value は S / A / B / NG の4値で、NG だけを狙うには value 指定が最も確実。
+    # アクセシブル名（ラベル全文）でも1件に引ける。
+    NG_RADIO_NAME = "NG - 基準を下回っている"
+    NG_RADIO_VALUE_CSS = 'input[type="radio"][value="NG"]'
+
+    # 総合評価コメント: <textarea name="summary">。
+    # aria-label 等が無くアクセシブル名では引けないため name 属性で指定する。
+    # 単に "textarea" だと将来ページ内に他の複数行入力が増えたとき誤爆する。
+    COMMENT_TEXTAREA_NAME = "総合評価コメント"
+    COMMENT_TEXTAREA_CSS = 'textarea[name="summary"]'
+
+    # 送信・中止: どちらも <button class="sg-button">（登録は type="submit"）
+    SUBMIT_BUTTON_NAME = "評価を登録"
+    CANCEL_BUTTON_NAME = "キャンセル"

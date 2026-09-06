@@ -127,17 +127,19 @@ async def collect_applicant_links(page: Page, config: dict) -> list[dict]:
     # 再ログイン後もなお 0 件なら原因はセッション以外なので、切り分け用に
     # 失敗時点の画面を残す。
     if not unique_applicants:
-        await _dump_debug_artifacts(page, config, "applicant_list_empty")
+        await dump_debug_artifacts(page, config, "applicant_list_empty")
 
     return unique_applicants
 
 
-async def _dump_debug_artifacts(page: Page, config: dict, label: str) -> None:
+async def dump_debug_artifacts(page: Page, config: dict, label: str) -> None:
     """異常時にスクリーンショットとHTMLを data/debug/ へ保存する。
 
     応募者0件などの失敗が「セッション失効・UI/セレクタ変更・一時的な描画
     失敗」のいずれかを後から切り分けられるよう、失敗時点の画面状態を残す。
     保存自体の失敗は本処理を止めない。
+
+    evaluation_form からも呼ぶため公開名にしている（label で用途を切り替える）。
     """
     try:
         download_dir = config["scan"].get("download_dir", "./data/downloads")
@@ -152,7 +154,7 @@ async def _dump_debug_artifacts(page: Page, config: dict, label: str) -> None:
         html_path.write_text(await page.content(), encoding="utf-8")
 
         logger.warning(
-            f"応募者0件のため診断用に画面を保存: {png_path} / {html_path} "
+            f"診断用に画面を保存 ({label}): {png_path} / {html_path} "
             f"(現在URL: {page.url})"
         )
     except Exception as e:

@@ -25,8 +25,19 @@ def total_to_rank(total_score: int, criteria_count: int) -> str:
         return "D"
 
 
-def is_first_pass_candidate(avg_score: float, age: int | None, first_pass_criteria: list[dict]) -> str:
-    """年齢帯ごとの閾値に基づいて1次通過候補を判定する。○/△/空文字を返す"""
+def classify_first_pass(avg_score: float, age: int | None, first_pass_criteria: list[dict]) -> str:
+    """年齢帯ごとの閾値に基づいて1次通過候補を判定する。○/△/×/空文字を返す。
+
+    空文字は「不合格」ではなく**判定できなかった**ことを表す:
+      - 年齢が取得できなかった（age is None）
+      - first_pass_criteria が未設定
+      - どの age_range にも該当しない（例: 55歳以上で年齢帯が54歳までしかない）
+
+    HRMOS への自動NG登録のように「不合格」を確定させる処理は、× と △ だけを
+    対象にし、空文字は必ず対象外にすること。空文字を不合格と同一視すると、
+    書類から年齢を読めなかっただけの応募者や、年齢帯の設定漏れに当たった
+    応募者を、点数と無関係に落とすことになる。
+    """
     if age is None or not first_pass_criteria:
         return ""
     for criteria in first_pass_criteria:
@@ -37,8 +48,19 @@ def is_first_pass_candidate(avg_score: float, age: int | None, first_pass_criter
                 return "○"
             elif avg_score >= min_score - 0.3:
                 return "△"
-            return ""
+            return "×"
     return ""
+
+
+def is_first_pass_candidate(avg_score: float, age: int | None, first_pass_criteria: list[dict]) -> str:
+    """年齢帯ごとの閾値に基づいて1次通過候補を判定する。○/△/空文字を返す。
+
+    Excel の「1次通過候補」列とメール通知はこの3値を前提にしているため、
+    classify_first_pass の × を空文字に落として従来の戻り値を保つ。
+    不合格と判定不能を区別したい場合は classify_first_pass を直接使う。
+    """
+    mark = classify_first_pass(avg_score, age, first_pass_criteria)
+    return "" if mark == "×" else mark
 
 
 def build_evaluation_prompt(

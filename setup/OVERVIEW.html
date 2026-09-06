@@ -412,6 +412,7 @@ footer {
         <div class="note danger">
           <span class="lb">最終判断は必ず人が</span>
           <p>AI の評価は<b>参考情報</b>です。採用選考でのAI利用は、有資格者による事前レビューが利用規約上の要件になっています。AIの点数だけで足切りする運用にはしないでください。</p>
+          <p style="margin-bottom:0">HRMOS へ自動で NG 評価を登録する機能もありますが、<b>初期状態では無効</b>です。有効にすると人が書類を見ないまま不合格が確定するため、採用責任者の承認と、登録済みの応募者を人が抜き取り確認する運用が前提になります。</p>
         </div>
       </section>
 
@@ -605,7 +606,7 @@ first_pass_criteria:          <span class="c"># 1次通過候補の判定（年�
               <tr><td class="mono">run.py scan --all</td><td>全応募者を再評価</td><td>評価基準を変えたとき</td></tr>
               <tr><td class="mono">run.py report</td><td>DBの過去分をExcelに再出力（評価はしない）</td><td>過去データの出し直し</td></tr>
               <tr><td class="mono">run.py status</td><td>評価の進捗を表示</td><td>状況確認</td></tr>
-              <tr><td class="mono">run.py doctor</td><td>環境を9項目で自己診断</td><td>導入直後・不調のとき</td></tr>
+              <tr><td class="mono">run.py doctor</td><td>環境を10項目で自己診断</td><td>導入直後・不調のとき</td></tr>
             </tbody>
           </table>
         </div>
@@ -715,7 +716,7 @@ first_pass_criteria:          <span class="c"># 1次通過候補の判定（年�
             <tbody>
               <tr><td class="mono">main.py</td><td>全体の進行役。各レイヤーを順に呼ぶ</td></tr>
               <tr><td class="mono">config.py</td><td>設定の読み込み・検証・環境変数での上書き</td></tr>
-              <tr><td class="mono">doctor.py</td><td>環境の自己診断（9項目）</td></tr>
+              <tr><td class="mono">doctor.py</td><td>環境の自己診断（10項目）</td></tr>
               <tr><td class="mono">browser/auth.py</td><td>HRMOS認証。2段階ログインとセッション有効性の判定</td></tr>
               <tr><td class="mono">browser/navigator.py</td><td>応募者一覧の巡回と添付書類のダウンロード</td></tr>
               <tr><td class="mono">browser/page_utils.py</td><td>ページ遷移の共通処理（リトライ付き）</td></tr>

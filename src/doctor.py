@@ -18,6 +18,9 @@ NG = "NG"
 # 診断用の最小プロンプト（本番の評価プロンプトは使わずコストを抑える）
 PING_PROMPT = 'Reply with exactly this JSON and nothing else: {"evaluations":[],"ok":true}'
 
+# 実運用で現れる上限の目安。年齢帯がここまで届いていなければ取りこぼしとみなす
+EXPECTED_MAX_AGE = 60
+
 
 def _check_python() -> tuple[str, str, str]:
     version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
@@ -236,6 +239,73 @@ def _check_email(config: dict | None) -> tuple[str, str, str]:
     return OK, "メール通知", f"有効 / 宛先 {len(recipients)}件"
 
 
+def _first_pass_age_gaps(first_pass_criteria: list) -> list[str]:
+    """1次通過基準の年齢帯にある隙間・取りこぼしを列挙する
+
+    どの帯にも入らない年齢の応募者は点数に関わらず「判定不能」になり、
+    自動NG登録の対象から外れる（＝人が手で見るまで放置される）。
+    """
+    ranges = []
+    for criteria in first_pass_criteria:
+        if not isinstance(criteria, dict):
+            continue
+        age_range = criteria.get("age_range")
+        if isinstance(age_range, (list, tuple)) and len(age_range) == 2:
+            try:
+                ranges.append((int(age_range[0]), int(age_range[1])))
+            except (TypeError, ValueError):
+                continue
+    if not ranges:
+        return []
+
+    ranges.sort()
+    gaps = []
+    for (_, prev_end), (next_start, _) in zip(ranges, ranges[1:]):
+        if next_start > prev_end + 1:
+            gaps.append(f"{prev_end + 1}〜{next_start - 1}歳")
+
+    # 開始年齢で並べているため、末尾の帯が最大の上限を持つとは限らない
+    highest = max(end for _, end in ranges)
+    if highest < EXPECTED_MAX_AGE:
+        gaps.append(f"{highest + 1}歳以上")
+    return gaps
+
+
+def _check_hrmos_evaluation(config: dict | None) -> tuple[str, str, str]:
+    if config is None:
+        return WARN, "HRMOS自動NG登録", "設定ファイルが読めないため判定できません。"
+
+    ng_config = config.get("hrmos_evaluation", {})
+    if not isinstance(ng_config, dict):
+        return NG, "HRMOS自動NG登録", (
+            "hrmos_evaluation: の書き方が正しくありません"
+            "（enabled: / dry_run: を字下げして並べてください）。"
+        )
+    if not ng_config.get("enabled"):
+        return OK, "HRMOS自動NG登録", "無効 (enabled: false) — 任意機能のため問題ありません"
+
+    first_pass_criteria = config.get("first_pass_criteria", [])
+    if not first_pass_criteria:
+        return NG, "HRMOS自動NG登録", (
+            "有効ですが first_pass_criteria（1次通過の判定基準）が未設定です。"
+            "全員が判定不能となり1件も登録されません。"
+        )
+
+    mode = "dry-run（登録しません）" if ng_config.get("dry_run", True) else "本番登録"
+    detail = (
+        f"有効 / {mode} / 上限 {ng_config.get('max_per_run', 20)}件 / "
+        f"応募 {ng_config.get('max_age_days', 3)}日以内"
+    )
+
+    gaps = _first_pass_age_gaps(first_pass_criteria)
+    if gaps:
+        return WARN, "HRMOS自動NG登録", (
+            f"{detail} ※first_pass_criteria の年齢帯に隙間があります（{'、'.join(gaps)}）。"
+            "この年齢の応募者は判定不能となり登録対象から外れます。"
+        )
+    return OK, "HRMOS自動NG登録", detail
+
+
 def _display_width(text: str) -> int:
     """全角文字を2桁として数えた表示幅を返す（コンソールの桁揃え用）"""
     return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
@@ -273,6 +343,7 @@ def run_doctor(config_path: str = "config.yaml", skip_llm: bool = False) -> int:
     results.append(_check_credentials(config))
     results.append(_check_data_dirs())
     results.append(_check_email(config))
+    results.append(_check_hrmos_evaluation(config))
 
     if skip_llm:
         results.append((WARN, "AI評価の疎通", "--skip-llm 指定のためスキップしました"))

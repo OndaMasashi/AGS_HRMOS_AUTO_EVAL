@@ -26,6 +26,10 @@ python run.py scan --all
 # エラー応募者のリトライ
 python run.py scan --retry-errors
 
+# HRMOSへの自動NG評価登録を行わず、対象者をログに出すだけにする
+# （hrmos_evaluation.enabled が true のときのみ意味がある）
+python run.py scan --dry-run
+
 # DB内の評価結果をExcel再出力（評価なし・AI呼び出しなし）
 python run.py report
 python run.py report --run-id <uuid>
@@ -33,7 +37,7 @@ python run.py report --run-id <uuid>
 # 進捗確認
 python run.py status
 
-# 環境の自己診断（9項目。--skip-llm でAI呼び出しを省略）
+# 環境の自己診断（10項目。--skip-llm でAI呼び出しを省略）
 python run.py doctor
 python run.py doctor --skip-llm
 
@@ -55,7 +59,7 @@ AI を呼び出すのは `scan` と `doctor`（`--skip-llm` なし）のみ。`r
 ```
 CLI (run.py: argparse)
   └→ main.py: run_scan() / run_report() / show_status()
-  |    ├→ browser/   : Playwright によるHRMOSログイン・応募者一覧巡回・添付DL
+  |    ├→ browser/   : Playwright によるHRMOSログイン・応募者一覧巡回・添付DL・自動NG評価登録
   |    ├→ parser/    : PDF(pdfplumber) / DOCX(python-docx) / XLSX(openpyxl) → テキスト
   |    ├→ evaluator/ : PII マスキング → プロンプト構築 → LLM 呼び出し → JSON パース
   |    ├→ database/  : SQLite (Repository パターン)
@@ -91,7 +95,9 @@ CLI (run.py: argparse)
 
 ### Excel出力
 
-列構成: 基本情報 → 1次通過候補(○/△) → 平均点 → 合計点 → 総合ランク(S/A/B/C/D) → レーダーチャート → 総合評価 → 各評価基準(点・コメント) → 備考欄 → 質問候補。ランクは平均点で算出し、セル色を条件付きで設定。
+列構成: 基本情報 → 1次通過候補 → 平均点 → 合計点 → 総合ランク(S/A/B/C/D) → レーダーチャート → 総合評価 → 各評価基準(点・コメント) → 備考欄 → 質問候補。ランクは平均点で算出し、セル色を条件付きで設定。
+
+「1次通過候補」列は `classify_first_pass()` の4値を出す: `○`（緑）/ `△`（薄黄）/ `×`（色なし）/ `？`（薄灰＝年齢不明・年齢帯外で**判定できなかった**）。`×` と `？` は意味が違う（前者はAIの点数が基準未満、後者は点数を見ていない）ため必ず別表示にすること。**セル自体が応募者ページへのハイパーリンク**で、○ 以外も1クリックで開ける。
 
 ## Key Configuration
 
@@ -105,6 +111,7 @@ CLI (run.py: argparse)
 - `interview_questions.perspective`: 面接質問生成の観点
 - `email.attach_resumes`: `true`（デフォルト）で1次通過候補(○)の経歴書をメール添付。経歴書はマスクなしPIIを含むため運用注意
 - `email.notify_on_no_candidates`: `true`（デフォルト）で新規応募者0件の正常終了時も「新規なし」通知を送る（無音による誤認防止）。失敗アラート（認証失敗・一覧0件・評価成功0件・例外）は `email.enabled` のみで常時送信
+- `hrmos_evaluation`: HRMOS 上での自動NG評価登録。**配布時は OFF**（`enabled: false` / `dry_run: true`）。対象は1次通過候補が○にならなかった応募者のうち、**年齢から判定できた人（× と △）だけ**。年齢不明・年齢帯外は「判定不能」として対象外にする（点数と無関係に落とさないため）。`max_age_days`（既定3日）以内の応募に限定し、`max_per_run` で1実行あたりの上限を設ける。`--all` では登録しない。結果は `applicants.hrmos_eval_status` に記録して二重登録を防ぐ
 
 ## Conventions
 
@@ -112,6 +119,7 @@ CLI (run.py: argparse)
 - セッション管理: `storage_state.json` に Playwright セッションを保存。セッション有効性は URL 判定だけでなく応募者一覧（`/interviews/screening/` リンク）の描画有無まで確認し、失効途中（URL は正常だが一覧が空）でも自動再ログインする（`browser/auth.py`）。ログイン失敗時はこのファイルを削除して再実行
 - 実行時生成物: `data/` 配下（downloads / reports / logs / debug / hrmos.db）は `.gitignore` 対象。`debug/` は応募者0件など異常時の画面・HTML（`applicant_list_empty_*.png/.html`）の保存先で原因切り分け用
 - CSSセレクタ: HRMOS ページの要素セレクタは `browser/selectors.py` に集約。UI変更時はここを修正
+- HRMOS への書き込みは `browser/evaluation_form.py` だけに閉じる。`navigator.py` は読み取り専用のまま保つ（誤って評価を登録し得る経路を1箇所に限定するため）。書き込み系では「判断に迷ったら登録しない」側に倒し、要素が1つに絞れないときは操作せず失敗させる
 - ページ遷移: `page.goto()` を直接呼ばず `browser/page_utils.py` の `goto_with_retry()` を使う。`wait_until="networkidle"` の一発勝負は一時的な遅延で実行全体を落とすため、遷移は `domcontentloaded` で成立させ、`networkidle` は未到達でも続行する扱いにしている（遷移失敗のみ最大3回試行＝初回＋リトライ2回）。描画完了が必須の箇所は `ready_selector` で要素の出現を待つ
 - 改修履歴: `improvement_list/` に `YYYY-MM-DD_{説明}.md` 形式で記録。未対応タスクは `ROADMAP.md` の上部に残す
 - 認証情報: `config.yaml` に平文で書かない。`install.bat` は Windows のユーザー環境変数（`HRMOS_EMAIL` / `HRMOS_PASSWORD` / `GEMINI_API_KEY`）に保存する。フォルダごとコピーしても持ち出されないようにするため

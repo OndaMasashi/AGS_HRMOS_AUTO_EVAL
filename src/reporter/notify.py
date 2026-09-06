@@ -125,6 +125,7 @@ def send_report_email(
     total_applicants: int,
     scanned_count: int,
     attachment_sources: list[dict] | None = None,
+    ng_summary: str = "",
 ) -> bool:
     """AI評価結果をメールで送信する
 
@@ -132,6 +133,8 @@ def send_report_email(
         attachment_sources: 添付する経歴書ファイルのリスト。
             各要素は {"applicant_name": str, "file_path": str}。
             1次通過候補(○)の経歴書のみを想定（呼び出し側で抽出済み）。
+        ng_summary: HRMOSへの自動NG評価登録の結果を1行にまとめた文字列。
+            機能が無効なら空文字（本文には出さない）。
 
     Returns:
         True: 送信成功, False: 送信失敗またはスキップ
@@ -151,7 +154,7 @@ def send_report_email(
     subject = f"{prefix} AI評価完了 {eval_count}名 ({today})"
     html_body = _build_html(
         evaluations, criteria_names, total_applicants, scanned_count,
-        today, first_pass_criteria,
+        today, first_pass_criteria, ng_summary,
     )
 
     attachments = []
@@ -258,6 +261,7 @@ def _build_html(
     scanned_count: int,
     today: str,
     first_pass_criteria: list[dict],
+    ng_summary: str,
 ) -> str:
     """メール本文のHTMLを生成する"""
     # 応募者ごとにグルーピング（評価基準ごとの点数・コメントも集約）
@@ -341,6 +345,15 @@ def _build_html(
             f"</tr>\n"
         )
 
+    # HRMOSへの自動NG評価登録の結果（機能が無効なら出さない）
+    ng_summary_html = ""
+    if ng_summary:
+        ng_summary_html = (
+            '\n  <p style="margin: 16px 0; padding: 8px 12px; background-color: #f4f6f8; '
+            'border-left: 4px solid #2F5496; font-size: 13px;">'
+            f"{html.escape(ng_summary)}</p>"
+        )
+
     return f"""\
 <div style="font-family: sans-serif; color: #333;">
   <h2 style="color: #2F5496;">{today} HRMOS AI評価結果</h2>
@@ -348,7 +361,7 @@ def _build_html(
     <tr><td style="padding: 4px 12px;">スキャン対象</td><td><strong>{total_applicants}名</strong></td></tr>
     <tr><td style="padding: 4px 12px;">処理済み</td><td><strong>{scanned_count}名</strong></td></tr>
     <tr><td style="padding: 4px 12px;">評価完了</td><td><strong>{eval_count}名</strong></td></tr>
-  </table>
+  </table>{ng_summary_html}
 
   <h3>評価サマリ</h3>
   <div style="overflow-x: auto;">

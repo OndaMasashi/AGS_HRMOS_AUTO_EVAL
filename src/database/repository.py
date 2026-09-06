@@ -104,9 +104,39 @@ class Repository:
         self.conn.commit()
 
     def reset_all_applicants(self):
-        """全応募者をpendingに戻す"""
+        """全応募者をpendingに戻す
+
+        hrmos_eval_status は意図的にリセットしない。ここを消すと --all の再評価で
+        HRMOS へ同じ応募者のNG評価が二重登録される（HRMOS 側に重複防止はない）。
+        """
         self.conn.execute("UPDATE applicants SET status = 'pending', scanned_at = NULL")
         self.conn.commit()
+
+    def mark_hrmos_eval(self, applicant_id: str, status: str, applied_at: Optional[datetime] = None):
+        """HRMOSへの自動NG評価登録の結果を記録する
+
+        applied_at が None のときは既存の値を残す（応募日時を読めなかった回で、
+        以前に読めていた日時を消さないため）。
+        """
+        if applied_at is not None:
+            self.conn.execute(
+                "UPDATE applicants SET hrmos_eval_status = ?, hrmos_eval_at = ?, applied_at = ? "
+                "WHERE id = ?",
+                (status, datetime.now().isoformat(), applied_at.isoformat(), applicant_id),
+            )
+        else:
+            self.conn.execute(
+                "UPDATE applicants SET hrmos_eval_status = ?, hrmos_eval_at = ? WHERE id = ?",
+                (status, datetime.now().isoformat(), applicant_id),
+            )
+        self.conn.commit()
+
+    def get_hrmos_eval_status(self, applicant_id: str) -> Optional[str]:
+        """応募者のHRMOS自動NG評価登録の状態を返す（未処理なら None）"""
+        row = self.conn.execute(
+            "SELECT hrmos_eval_status FROM applicants WHERE id = ?", (applicant_id,)
+        ).fetchone()
+        return row["hrmos_eval_status"] if row else None
 
     def get_applicant_stats(self) -> dict:
         """応募者の統計を取得"""
