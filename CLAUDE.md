@@ -50,7 +50,7 @@ powershell -ExecutionPolicy Bypass -File setup\build_dist.ps1
 
 AI を呼び出すのは `scan` と `doctor`（`--skip-llm` なし）のみ。`report` / `status` / `doctor --skip-llm` は課金が発生しない。
 
-テストは `tests/test_pii_masker.py`（pytest ベース、PII マスキングのユニットテスト）のみ。ただし pytest は `requirements.txt` に含まれず `.venv` にも未導入のため、現状そのままでは実行できない（`pip install pytest` が必要）。
+テストは `tests/` に2件: `test_pii_masker.py`（PII マスキング）と `test_first_pass.py`（1次通過判定の4値と応募日時のパース）。**pytest は `requirements.txt` に含まれず `.venv` にも未導入のため、そのままでは実行できない**（`pip install pytest` が必要）。`test_first_pass.py` は pytest 固有の機能（fixture / parametrize）を使っていないので、クラスを直接インスタンス化してメソッドを呼ぶだけでも検証できる。
 
 ## Architecture
 

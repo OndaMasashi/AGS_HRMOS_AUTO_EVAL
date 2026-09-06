@@ -159,7 +159,7 @@ Anthropic 利用ポリシーは resume screening を高リスク用途に指定�
 
 ### 低: 既存テストが実行できない状態になっている
 
-`tests/test_pii_masker.py` に pytest ベースのユニットテストがあるが、pytest が `requirements.txt` にも `.venv` にも入っておらず実行できない。まず依存に追加して復旧させ、そのうえでパーサ・評価 JSON のパースなど副作用のない層へ広げるのが現実的。該当: `requirements.txt` / `tests/`
+`tests/` にユニットテストが2件（`test_pii_masker.py` / `test_first_pass.py`、計30ケース超）あるが、pytest が `requirements.txt` にも `.venv` にも入っておらず実行できない。**自動NG登録の判定ロジックを守るテストが動かない状態**なので、まず依存に追加して復旧させ、そのうえでパーサ・評価 JSON のパースなど副作用のない層へ広げるのが現実的。該当: `requirements.txt` / `tests/`
 
 
 ### 低: リポジトリルートに不要な生成物が残っている

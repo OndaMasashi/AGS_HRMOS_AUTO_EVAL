@@ -353,8 +353,9 @@ AGS_HRMOS_AUTO_EVAL/
 │   └── reporter/
 │       ├── export.py       # Excel評価レポート出力
 │       └── notify.py       # メール通知（Resend）
-├── tests/
-│   └── test_pii_masker.py  # PIIマスキングのユニットテスト（pytest は別途要インストール）
+├── tests/                  # pytest は別途要インストール（requirements.txt に未収録）
+│   ├── test_pii_masker.py  # PIIマスキングのユニットテスト
+│   └── test_first_pass.py  # 1次通過判定（○/△/×/判定不能）・応募日時パースのユニットテスト
 ├── improvement_list/       # 改修履歴（YYYY-MM-DD_{説明}.md）
 ├── docs/                   # 総括報告書・アーキテクチャ図
 └── data/                   # 実行時に自動生成
