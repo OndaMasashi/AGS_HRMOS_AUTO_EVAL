@@ -107,7 +107,7 @@ CLI (run.py: argparse)
 - `evaluation.provider`: `"gemini_api"`（既定）/ `"claude"` / `"gemini"`（非推奨）
 - `evaluation.model`: 評価に使うモデル。`gemini_api` では API のモデル名（既定 `gemini-3.5-flash-lite`。同単価の `gemini-2.5-flash` より実測で約5倍速く、既存評価との一致度も高い）、`claude` では CLI の `--model` に渡すエイリアス（`sonnet` / `opus`）。**必ず明示する**。未設定だと `claude_client.DEFAULT_MODEL`（`sonnet`）にフォールバックする。モデル無指定で `claude -p` を呼ぶと CLI の既定モデル＝開発者が Claude Code で選んでいるモデルが使われ、そちらを切り替えた瞬間に応募者の採点基準が変わる（2026-09-09 に実際に発生し、既定モデルが CLI の対応外バージョンになって全件 API Error 400 で失敗した）
 - `evaluation.gemini_api_key`: 環境変数 `GEMINI_API_KEY` での指定を推奨
-- `first_pass_criteria`: 年齢帯×平均点閾値による1次通過判定
+- `first_pass_criteria`: 年齢帯×平均点閾値による1次通過判定。**平均点は評価項目数で割った値なので、取りうる値は飛び飛びになる**（7項目なら 0.143 刻み）。そのため間に取りうる値がない2つの閾値は同じ判定になる（旧設定の `3.9` と `4.0` は実質どちらも「4.00以上」で、別基準にしているつもりが同一基準で動いていた）。閾値を変えるときは実際の点数分布に当てて通過率を確認し、`config.yaml` に「実質 N.NN以上」をコメントで残すこと。**基準を上げると △ が × に落ちて `hrmos_evaluation` の自動NG登録の対象が増える**（HRMOS への登録は取り消せない）
 - `interview_questions.perspective`: 面接質問生成の観点
 - `email.attach_resumes`: `true`（デフォルト）で1次通過候補(○)の経歴書をメール添付。経歴書はマスクなしPIIを含むため運用注意
 - `email.notify_on_no_candidates`: `true`（デフォルト）で新規応募者0件の正常終了時も「新規なし」通知を送る（無音による誤認防止）。失敗アラート（認証失敗・一覧0件・評価成功0件・例外）は `email.enabled` のみで常時送信
