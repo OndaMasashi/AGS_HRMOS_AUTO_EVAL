@@ -15,7 +15,8 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 ## 主な機能
 
 - 応募者書類の自動ダウンロード（PDF/Word/Excel対応）
-- Gemini API / Claude CLI によるAI自動評価（設定した評価基準に基づく1〜5点のスコアリング、configで切替可能）
+- Gemini API / Claude CLI によるAI自動評価（設定した評価基準に基づく1〜5点のスコアリング、configで切替可能。使うモデルは `evaluation.model` で固定する）
+- LLM送信前の個人情報マスキング（氏名・電話・住所・メールアドレス・郵便番号・生年月日の月日。職歴・企業名・資格は評価に必要なため残す）
 - 面接質問候補の自動生成（応募者ごとに3問）
 - Excel一覧表の自動出力（レーダーチャート・1次通過候補・備考欄付き）
 - メール通知（Resend API、オプション。評価内訳付きサマリ・○のHRMOSリンク・1次通過候補の経歴書添付。加えて新規0件時の「新規なし」通知・スキャン失敗時のアラートで無音による見逃しを防止）
@@ -121,7 +122,7 @@ copy config.yaml.example config.yaml
 powershell -ExecutionPolicy Bypass -File setup\build_dist.ps1
 ```
 
-`dist/AGS_HRMOS_AUTO_EVAL_YYYYMMDD.zip` が生成されます。Git 管理下のファイルを基準に組み立て、`config.yaml` / `storage_state.json` / `data/` などの機密・実行時生成物は自動で除外します。配布に必要なファイルが欠けている場合はエラーで停止します。
+`setup/AGS_HRMOS_AUTO_EVAL_YYYYMMDD.zip` が生成されます（同僚へ渡す3点が同じ場所に揃うよう、既定の出力先は `setup/` です）。Git 管理下のファイルを基準に組み立て、`config.yaml` / `storage_state.json` / `data/` などの機密・実行時生成物は自動で除外します。配布に必要なファイルが欠けている場合はエラーで停止します。
 
 > 配布先には「zip を展開する前に、右クリック → プロパティ → 『許可する』にチェック」を必ず伝えてください。
 
@@ -169,7 +170,7 @@ python run.py -v scan
 | 年齢 | 書類から読み取った年齢 |
 | HRMOS URL | 応募者の個別ページURL |
 | ファイル名 | ダウンロードした書類名 |
-| 1次通過候補 | 年齢帯×平均点閾値に基づく判定（○/△/空） |
+| 1次通過候補 | 年齢帯×平均点閾値に基づく判定（○/△/×/？）。**セル自体が応募者ページへのリンク**。`？` は年齢不明・年齢帯外で**判定できなかった**ことを表し、点数が基準未満の `×` とは意味が違う |
 | 平均点 | 合計点 ÷ 評価基準数（小数点1桁） |
 | 合計点 | 全評価項目の合計スコア |
 | 総合ランク | S/A/B/C/D（平均点ベース、色付き） |
@@ -344,7 +345,7 @@ AGS_HRMOS_AUTO_EVAL/
 │   │   ├── claude_client.py     # Claude CLI呼び出し（リトライ付き）
 │   │   ├── gemini_api_client.py # Gemini REST API呼び出し（APIキー認証・推奨）
 │   │   ├── gemini_client.py     # Gemini CLI呼び出し（非推奨・個人アカウント提供終了）
-│   │   ├── pii_masker.py        # LLM送信前の個人情報マスキング
+│   │   ├── pii_masker.py        # LLM送信前の個人情報マスキング（氏名・電話・住所・メール・郵便番号・生年月日の月日）
 │   │   ├── prompt_builder.py    # 評価プロンプト構築
 │   │   └── response_parser.py   # JSON応答パース・検証
 │   ├── database/
@@ -353,7 +354,7 @@ AGS_HRMOS_AUTO_EVAL/
 │   └── reporter/
 │       ├── export.py       # Excel評価レポート出力
 │       └── notify.py       # メール通知（Resend）
-├── tests/                  # pytest は別途要インストール（requirements.txt に未収録）
+├── tests/                  # 全56件。pytest は別途要インストール（requirements.txt に未収録）
 │   ├── test_pii_masker.py  # PIIマスキングのユニットテスト
 │   └── test_first_pass.py  # 1次通過判定（○/△/×/判定不能）・応募日時パースのユニットテスト
 ├── improvement_list/       # 改修履歴（YYYY-MM-DD_{説明}.md）
@@ -379,6 +380,23 @@ evaluation_criteria:
 - 各項目は1〜5点でスコアリングされます
 - `description` を具体的に書くほど評価精度が上がります
 - 項目数に制限はありませんが、多すぎるとLLM CLIの処理時間が長くなります
+- **評価基準を変えると過去の評価と比較できなくなります。** `config.yaml` は git 管理外で履歴が残らないため、変更したら `improvement_list/` に日付と変更内容を記録してください
+
+### 使うモデルの固定
+
+```yaml
+evaluation:
+  provider: "claude"
+  model: "opus"     # claude なら sonnet / opus、gemini_api なら API のモデル名
+```
+
+**`model` は必ず書いてください。** 空にすると Claude CLI のその時点の既定モデル（＝開発者が Claude Code で選んでいるモデル）が使われ、そちらを切り替えた瞬間に応募者の採点基準も変わります。実際 2026-09-09 に既定モデルが CLI の対応外バージョンに変わり、評価が全件失敗する状態になりました。
+
+モデルを変えると採点の傾向も変わります（実測で平均 0.07〜0.2 点の差）。変更後は過去の応募者を再評価して点差を確認してください。
+
+### 1次通過の閾値
+
+`first_pass_criteria` は年齢帯ごとの平均点しきい値です。**平均点は評価項目数で割った値なので、取りうる値は飛び飛びになります**（7項目なら 0.143 刻み）。そのため `3.9` と `4.0` のように、間に取りうる値がない2つの設定は同じ判定になります。閾値を変えるときは実際の点数分布を見て決めてください。
 
 面接質問の観点も `interview_questions.perspective` で自由にカスタマイズできます。
 
@@ -414,6 +432,8 @@ claude doctor      # インストール診断
 ```
 
 インストール済みでも**初回のブラウザ認証が済んでいないと非対話実行は失敗します**。一度 `claude` を起動してログインを完了してください。無人実行を安定させたい場合は `claude setup-token` で発行したトークンを環境変数 `CLAUDE_CODE_OAUTH_TOKEN` に設定します。
+
+`API Error: 400 ... does not support this model` が出る場合は、**Claude CLI のバージョンが `config.yaml` の `evaluation.model` に対応していません**。`claude update` で CLI を更新するか、`model` を対応するモデル（`sonnet` など）に変更してください。
 
 **`gemini`（CLI）の場合**
 
