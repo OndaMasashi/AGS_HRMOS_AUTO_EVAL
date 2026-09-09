@@ -45,9 +45,13 @@ evaluation:
   # "gemini"     : Gemini CLI を使う（非推奨）。個人アカウント向け提供は
   #                2026-06-18 に終了しており、通常は動作しない。
   provider: "gemini_api"
-  # provider が gemini_api のときに使うモデル。
+  # 評価に使うモデル。gemini_api ならAPIのモデル名、claude なら CLI の --model に渡す。
   # gemini-3.5-flash-lite は gemini-2.5-flash と同単価（入力$0.30/出力$2.50 per 1M）だが、
   # 実測で約5倍速く（3.9秒 vs 20.2秒/名）、既存のClaude評価との一致度も高い。
+  # provider が claude のときは "sonnet" / "opus" のようなエイリアスで書く。
+  # 必ず明示すること: 空にすると Claude CLI の既定モデル（開発者が Claude Code で
+  # 選んでいるモデル）が使われ、そちらを切り替えた瞬間に応募者の採点基準も変わる。
+  # 実際に2026-09-09、既定モデルがCLIの対応外バージョンに変わり全件失敗する状態になった。
   model: "gemini-3.5-flash-lite"
   gemini_api_key: ""              # 環境変数 GEMINI_API_KEY での指定を推奨
   system_instructions: |

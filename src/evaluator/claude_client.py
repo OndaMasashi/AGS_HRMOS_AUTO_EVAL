@@ -11,6 +11,9 @@ DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 5
 DEFAULT_TIMEOUT = 120
 MAX_TEXT_CHARS = 80000
+# config.yaml の evaluation.model が未設定のときに使うモデル。
+# エイリアス（sonnet / opus）で書くと、その時点の各世代の既定モデルに解決される。
+DEFAULT_MODEL = "sonnet"
 
 
 class ClaudeClientError(Exception):
@@ -26,6 +29,13 @@ def call_claude(prompt: str, config: dict) -> str:
     timeout = eval_config.get("timeout", DEFAULT_TIMEOUT)
     use_shell = eval_config.get("shell", False)
 
+    # モデルは必ず明示する。無指定だと Claude CLI の既定モデル（= 開発者が
+    # Claude Code で選んでいるモデル）が使われ、評価者の意図と無関係に採点基準が
+    # 変わってしまう。実際、2026-09-09 に既定モデルが CLI の対応外バージョンへ
+    # 変わり、claude -p が API Error 400 で全件失敗する状態になった。
+    model = eval_config.get("model") or DEFAULT_MODEL
+    cmd = ["claude", "-p", "--model", model]
+
     last_error = None
 
     for attempt in range(1, max_retries + 1):
@@ -37,7 +47,7 @@ def call_claude(prompt: str, config: dict) -> str:
             env.pop("CLAUDECODE", None)
 
             result = subprocess.run(
-                ["claude", "-p"],
+                cmd,
                 input=prompt,
                 capture_output=True,
                 text=True,

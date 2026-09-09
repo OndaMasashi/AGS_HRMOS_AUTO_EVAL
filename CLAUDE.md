@@ -50,7 +50,7 @@ powershell -ExecutionPolicy Bypass -File setup\build_dist.ps1
 
 AI を呼び出すのは `scan` と `doctor`（`--skip-llm` なし）のみ。`report` / `status` / `doctor --skip-llm` は課金が発生しない。
 
-テストは `tests/` に2件: `test_pii_masker.py`（PII マスキング）と `test_first_pass.py`（1次通過判定の4値と応募日時のパース）。**pytest は `requirements.txt` に含まれず `.venv` にも未導入のため、そのままでは実行できない**（`pip install pytest` が必要）。`test_first_pass.py` は pytest 固有の機能（fixture / parametrize）を使っていないので、クラスを直接インスタンス化してメソッドを呼ぶだけでも検証できる。
+テストは `tests/` に2件: `test_pii_masker.py`（PII マスキング）と `test_first_pass.py`（1次通過判定の4値と応募日時のパース）。**pytest は `requirements.txt` に含まれない**（配布先には不要なため）。開発機の `.venv` には 2026-09-09 に導入済みで `.venv\Scripts\python.exe -m pytest tests/ -q` で56件が走る。新しい環境では `pip install pytest` が要る。`test_first_pass.py` は pytest 固有の機能（fixture / parametrize）を使っていないので、クラスを直接インスタンス化してメソッドを呼ぶだけでも検証できる。
 
 ## Architecture
 
@@ -76,10 +76,10 @@ CLI (run.py: argparse)
 | provider | 実装 | 認証 | 備考 |
 |---|---|---|---|
 | `gemini_api` | `gemini_api_client.py` | 環境変数 `GEMINI_API_KEY` | REST API を urllib で直接呼ぶ。CLI・Node.js 不要で無人実行に強い。**既定** |
-| `claude` | `claude_client.py` | Claude CLI の対話ログイン | `subprocess.run(["claude","-p"])`。npm 版は `claude.cmd` になり CreateProcess が解決できないため **ネイティブ版（`claude.exe`）が必要** |
+| `claude` | `claude_client.py` | Claude CLI の対話ログイン | `subprocess.run(["claude","-p","--model",…])`。npm 版は `claude.cmd` になり CreateProcess が解決できないため **ネイティブ版（`claude.exe`）が必要** |
 | `gemini` | `gemini_client.py` | Gemini CLI | **非推奨**。個人アカウント向け提供は 2026-06-18 に終了 |
 
-- PII マスキング (`pii_masker.py`): LLM送信前に氏名・電話・住所をマスク、応答後にアンマスク。**職歴・所属企業名・資格はマスクしない**（評価に必要なため）
+- PII マスキング (`pii_masker.py`): LLM送信前に氏名・電話・住所・メールアドレス・郵便番号・生年月日の月日をマスクし、応答後にアンマスク。氏名は**フルネームだけでなく姓・名の単独出現も**対象にする（フルネームだけ消しても実データ20人中6人で姓か名が素通りしていた）。**職歴・所属企業名・資格・生年月日の「年」はマスクしない**（評価と年齢判定に必要なため）。姓・名の単独マスクは企業名・学校名を示す語（`_CORP_HINT`）が近くにある箇所を除外し、1文字の姓・名は一般的な語と衝突するため対象外。マスクの順序にも依存があり、`090-1111-2222` の前半は郵便番号と同じ形なので**電話番号を郵便番号より先に**処理する
 - リトライ: 最大3回（`max_retries`）、タイムアウト300秒
 - テキスト切り詰め: 80,000文字上限（`claude_client.MAX_TEXT_CHARS` のハードコード。`config.yaml` の `max_text_chars` は参照されていない）
 - Claude CLI 呼び出し時は環境変数 `CLAUDECODE` を除去（ネストセッション防止）
@@ -105,7 +105,7 @@ CLI (run.py: argparse)
 - `credentials`: HRMOS ログイン情報（環境変数 `HRMOS_EMAIL` / `HRMOS_PASSWORD` で上書き可）
 - `evaluation_criteria`: 評価基準リスト（name + description）。項目数・内容は自由に変更可
 - `evaluation.provider`: `"gemini_api"`（既定）/ `"claude"` / `"gemini"`（非推奨）
-- `evaluation.model`: `gemini_api` のときのモデル。既定 `gemini-3.5-flash-lite`（同単価の `gemini-2.5-flash` より実測で約5倍速く、既存評価との一致度も高い）
+- `evaluation.model`: 評価に使うモデル。`gemini_api` では API のモデル名（既定 `gemini-3.5-flash-lite`。同単価の `gemini-2.5-flash` より実測で約5倍速く、既存評価との一致度も高い）、`claude` では CLI の `--model` に渡すエイリアス（`sonnet` / `opus`）。**必ず明示する**。未設定だと `claude_client.DEFAULT_MODEL`（`sonnet`）にフォールバックする。モデル無指定で `claude -p` を呼ぶと CLI の既定モデル＝開発者が Claude Code で選んでいるモデルが使われ、そちらを切り替えた瞬間に応募者の採点基準が変わる（2026-09-09 に実際に発生し、既定モデルが CLI の対応外バージョンになって全件 API Error 400 で失敗した）
 - `evaluation.gemini_api_key`: 環境変数 `GEMINI_API_KEY` での指定を推奨
 - `first_pass_criteria`: 年齢帯×平均点閾値による1次通過判定
 - `interview_questions.perspective`: 面接質問生成の観点

@@ -184,3 +184,87 @@ class TestRoundTrip:
         masker.mask("山田 太郎\n電話: 090-1234-5678")
         # 名前のバリエーション + 電話番号
         assert masker.masked_count >= 2
+
+
+# ==================================================================== #
+#  メールアドレス・郵便番号・生年月日のマスキング
+# ==================================================================== #
+class TestEmailMasking:
+    def test_mask_email(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("連絡先: taro.yamada@example.co.jp")
+        assert "taro.yamada@example.co.jp" not in result
+        assert "[EMAIL_001]" in result
+
+    def test_unmask_email(self):
+        masker = PiiMasker(applicant_name="")
+        masked = masker.mask("mail: a.b+c@example.com")
+        assert masker.unmask(masked) == "mail: a.b+c@example.com"
+
+
+class TestPostalCodeMasking:
+    def test_with_mark(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("〒123-4567 東京都世田谷区成城")
+        assert "123-4567" not in result
+        # 都道府県・市区町村は評価に使うため残す
+        assert "東京都世田谷区成城" in result
+
+    def test_without_mark(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("住所 123-4567 東京都")
+        assert "123-4567" not in result
+
+    def test_phone_not_treated_as_postal(self):
+        """携帯番号の前半（090-1111）を郵便番号と誤判定しない"""
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("携帯: 090-1111-2222")
+        assert "090-1111-2222" not in result
+        assert "[PHONE_001]" in result
+        assert "POST" not in result
+
+
+class TestBirthDateMasking:
+    def test_mask_month_day_keep_year(self):
+        """月日は伏せるが、年齢の判定に要る「年」は残す"""
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("生年月日: 1990年5月3日")
+        assert "5月3日" not in result
+        assert "1990年" in result
+
+    def test_label_on_separate_line(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("生年月日\n1985年12月24日")
+        assert "12月24日" not in result
+        assert "1985年" in result
+
+    def test_work_history_not_masked(self):
+        """職歴の年月日は在籍期間の評価に必要なのでマスクしない"""
+        masker = PiiMasker(applicant_name="")
+        text = "2020年4月1日 株式会社テストに入社\n2023年3月31日 退社"
+        assert masker.mask(text) == text
+
+
+class TestNamePartMasking:
+    def test_surname_alone(self):
+        """書類のあちこちに姓だけが残らないこと"""
+        masker = PiiMasker(applicant_name="山田 太郎")
+        result = masker.mask("氏名: 山田 太郎\n面談メモ: 山田は前職で")
+        assert "山田" not in result
+
+    def test_given_name_alone(self):
+        masker = PiiMasker(applicant_name="佐々木 健太")
+        result = masker.mask("佐々木 健太\n健太さんの担当案件")
+        assert "健太" not in result
+
+    def test_corporate_name_preserved(self):
+        """企業名の一部と一致する姓は評価に必要なので残す"""
+        masker = PiiMasker(applicant_name="田中 一郎")
+        result = masker.mask("株式会社田中工業に在籍")
+        assert "田中工業" in result
+
+    def test_single_char_part_not_masked(self):
+        """1文字の姓・名は一般的な語と衝突するため対象にしない"""
+        masker = PiiMasker(applicant_name="林 大")
+        result = masker.mask("大変多くの経験を積んだ")
+        assert "大変多くの経験を積んだ" in result

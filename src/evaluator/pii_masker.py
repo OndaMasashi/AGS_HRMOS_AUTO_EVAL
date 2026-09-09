@@ -10,6 +10,31 @@ logger = logging.getLogger(__name__)
 _DASH_CHARS = r'\-\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFF0D'
 _DASH_CLASS = f'[{_DASH_CHARS}]'
 
+# 姓・名が単独で出てきたときに、企業名・学校名の一部を誤ってマスクしないための手がかり。
+# 「所属企業名は評価に必要なのでマスクしない」方針を守るため、これらが近くにある箇所は残す。
+_CORP_HINT = re.compile(
+    r'株式会社|㈱|\(株\)|（株）|有限会社|合同会社|工業|商事|製作所|システム|テクノ|'
+    r'エンジニアリング|ホールディングス|グループ|銀行|大学|学院|学園|高校|病院|クリニック'
+)
+
+_EMAIL_PATTERN = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
+
+# 〒なしの「123-4567」は電話番号の一部（090-1111-2222 の前半）と紛らわしいため、
+# 前後にダッシュ付きの数字が続くものは除外する。電話番号のマスキングも先に済ませておく。
+_POSTAL_PATTERN = re.compile(
+    rf'〒\s*\d{{3}}{_DASH_CLASS}?\d{{4}}'
+    rf'|(?<![\d{_DASH_CHARS}])\d{{3}}{_DASH_CLASS}\d{{4}}(?!{_DASH_CLASS}?\d)'
+)
+
+# 生年月日は「年」を残して月日だけを伏せる。年齢の判定に生年が要るため
+# （年ごと消すと applicant_age が取れず、点数と無関係な「？」判定が増える）。
+# 職歴の年月（2020年4月入社など）を巻き込まないよう、ラベルが近くにあるものだけを対象にする。
+_BIRTH_DATE_PATTERN = re.compile(
+    r'(生年月日|生 年 月 日|誕生日|Date of Birth)(.{0,15}?(?:19|20)\d{2}\s*[年/.\-]\s*)'
+    r'(\d{1,2}\s*[月/.\-]\s*\d{1,2}\s*日?)',
+    re.DOTALL,
+)
+
 
 @dataclass
 class PiiMasker:
@@ -25,7 +50,10 @@ class PiiMasker:
     _mapping: dict[str, str] = field(default_factory=dict, init=False)
     _reverse_mapping: dict[str, str] = field(default_factory=dict, init=False)
     _counters: dict[str, int] = field(
-        default_factory=lambda: {"NAME": 0, "PHONE": 0, "ADDR": 0}, init=False
+        default_factory=lambda: {
+            "NAME": 0, "PHONE": 0, "ADDR": 0, "EMAIL": 0, "POST": 0, "DOB": 0,
+        },
+        init=False,
     )
 
     def mask(self, text: str) -> str:
@@ -34,7 +62,13 @@ class PiiMasker:
             return text
         result = text
         result = self._mask_names(result)
+        result = self._mask_emails(result)
+        # 電話番号を先に処理する。「090-1111-2222」の前半は郵便番号と同じ形なので、
+        # 郵便番号を先に消すと電話番号が半分だけ残る
         result = self._mask_phones(result)
+        # 郵便番号は住所のパターンに巻き込まれる前に処理する
+        result = self._mask_postal_codes(result)
+        result = self._mask_birth_dates(result)
         result = self._mask_addresses(result)
 
         if self._mapping:
@@ -78,6 +112,53 @@ class PiiMasker:
             if variant in result:
                 placeholder = self._add_mapping("NAME", variant)
                 result = result.replace(variant, placeholder)
+
+        # フルネームだけを消しても、書類のあちこちに姓だけ・名だけが単独で残る
+        # （実データ20人の検証で6人が該当した）。ここまで消して初めてマスクが成立する。
+        return self._mask_name_parts(result, name)
+
+    def _mask_name_parts(self, text: str, name: str) -> str:
+        """姓・名が単独で出てくる箇所をマスキングする
+
+        企業名・学校名の一部（例: 「田中工業」の「田中」）は評価に必要なので残す。
+        1文字の姓・名は一般的な語との衝突が多すぎるため対象にしない。
+        """
+        result = text
+        for part in [p for p in re.split(r'[\s　]+', name) if len(p) >= 2]:
+            for match in reversed(list(re.finditer(re.escape(part), result))):
+                start, end = match.start(), match.end()
+                if _CORP_HINT.search(result[max(0, start - 6):end + 6]):
+                    continue
+                placeholder = self._add_mapping("NAME", part)
+                result = result[:start] + placeholder + result[end:]
+        return result
+
+    # ------------------------------------------------------------------ #
+    #  メールアドレス・郵便番号・生年月日のマスキング
+    # ------------------------------------------------------------------ #
+    def _mask_emails(self, text: str) -> str:
+        """メールアドレスをマスキングする（評価には使わない情報）"""
+        return self._mask_by_pattern(text, _EMAIL_PATTERN, "EMAIL")
+
+    def _mask_postal_codes(self, text: str) -> str:
+        """郵便番号をマスキングする（評価には使わない情報）"""
+        return self._mask_by_pattern(text, _POSTAL_PATTERN, "POST")
+
+    def _mask_birth_dates(self, text: str) -> str:
+        """生年月日の月日をマスキングする（年は年齢判定に必要なため残す）"""
+        result = text
+        for match in reversed(list(_BIRTH_DATE_PATTERN.finditer(result))):
+            month_day = match.group(3)
+            placeholder = self._add_mapping("DOB", month_day)
+            result = result[:match.start(3)] + placeholder + result[match.end(3):]
+        return result
+
+    def _mask_by_pattern(self, text: str, pattern: re.Pattern, category: str) -> str:
+        """パターンに一致した箇所をまとめてマスキングする"""
+        result = text
+        for match in reversed(list(pattern.finditer(result))):
+            placeholder = self._add_mapping(category, match.group())
+            result = result[:match.start()] + placeholder + result[match.end():]
         return result
 
     @staticmethod
