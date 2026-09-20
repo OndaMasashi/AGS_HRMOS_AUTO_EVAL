@@ -4,36 +4,6 @@
 
 ## 未対応タスク
 
-### 最優先: 現行の Claude 運用が学習利用の対象になっていないか確認する
-
-Claude Code 公式ドキュメント `https://code.claude.com/docs/en/data-usage`（2026-08-25 確認）:
-
-> **Consumer users (Free, Pro, and Max plans)**: We will train new models using data from
-> Free, Pro, and Max accounts **when this setting is on (including when you use Claude Code
-> from these accounts).**
-
-- つまり Pro/Max は「学習に使われない」のではなく **設定次第**。Gemini 無料枠を失格にしたのと
-  同じ基準を当てるなら無条件合格ではない。
-- 保持期間も設定で変わる: 学習利用を許可 → **5年**、許可しない → 30日。
-- Team / Enterprise / API（商用条件）は既定で学習利用されない。
-
-本ツールは `provider: "claude"` で本番稼働しており、DB に 1,913名・評価 5,229件が蓄積している。
-設定が ON のまま稼働していた期間があれば、その間に送信した応募者の職歴・所属企業・資格・年齢・
-性別が学習に使われた可能性がある。
-
-**2026-09-09 追記**: この日の採点ドリフト調査で、過去の応募者20名分の書類を**追加で40回**
-（sonnet / opus 各20回）Claude へ送信した。本番と同じアカウント・同じ経路のため新たな経路が
-増えたわけではないが、送信量は増えている。この確認は先送りにしないこと。
-
-確認すること:
-1. `https://claude.ai/settings/data-privacy-controls` で現在の設定を確認する。
-2. **「今 OFF にする」より先に「これまで ON だった期間があるか」を確認する**（過去分の扱いが変わる）。
-3. ON だった期間があれば、社内の個人情報取扱い上の事象として記録・報告が必要か判断する。
-4. Claude を継続利用する場合、運用PCで `DISABLE_FEEDBACK_COMMAND=1` と
-   `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1` を設定する（`/feedback` `/bug` `/share` の
-   transcript 送信は保持5年）。
-
-
 ### 最優先: Gemini APIキーを auth key へ移行する（**期限到来済み**）
 
 公式ドキュメント `https://ai.google.dev/gemini-api/docs/api-key` に次の記載がある（2026-08-25 確認）:
@@ -55,24 +25,6 @@ Claude Code 公式ドキュメント `https://code.claude.com/docs/en/data-usage
 対応: AI Studio の APIキー画面で「キーのタイプ」列を確認し、Standard のものは新規作成した
 auth key に差し替える。差し替え後は環境変数 `GEMINI_API_KEY` を更新し、`run.py doctor` で疎通確認する。
 
-
-### 高: 自動NG登録に失敗した応募者を拾い直す経路がない
-
-2026-09-15 17:46 に自動NG登録が1件失敗した（`hrmos_eval_status='failed'`、応募者ID
-`2305920017108647936`）。原因は**セレクタの破損ではなくページ遷移のタイムアウト**
-（`Page.goto` が3回とも `domcontentloaded` に到達せず失敗）。画面は
-`data/debug/ng_form_error_20260915_174637_811854.png` に残っている。
-
-`failed` は `FINAL_STATUSES`（`submitted` / `too_old` / `submit_uncertain`）に含まれないため
-**再試行される設計**だが、`_run_ng_evaluation()` は**評価処理の中でしか呼ばれない**。
-この応募者は既に `status='scanned'` なので次回のスキャンで評価対象にならず、
-**自動NG登録が二度と試行されない**。`--retry-errors` は `status='error'` が対象なので拾えず、
-`--all` は仕様上そもそも登録しない。
-
-実害は「自動で落とされなかった」だけで安全側だが、運用者が失敗に気づいても対処手段がない。
-対応案: `failed` / `no_form` の応募者だけを対象に自動NG登録を再試行するコマンドを足す
-（評価は済んでいるので AI 呼び出しは不要）。なお今回の応募者は `applied_at` が取れておらず、
-再試行しても「応募日時が読めないため登録しない」側に倒れる見込み。
 
 ### 高: 自動NG登録の稼働を見届ける（新しい○基準での初回を含む）
 
@@ -170,6 +122,22 @@ Anthropic 利用ポリシーは resume screening を高リスク用途に指定�
 明示するのが対策の方向。詳細は [改修履歴](improvement_list/2026-09-09_fix_llm_model_drift.md)。
 
 
+### 低: 自動NG登録に失敗した応募者を拾い直す経路がない
+
+2026-09-15 に1件失敗した（原因は**セレクタの破損ではなくページ遷移のタイムアウト**。
+画面は `data/debug/ng_form_error_20260915_174637_811854.png`）。
+**この1件は再登録不要と判断済み**（2026-09-20）。以下は仕組みの話。
+
+`failed` は `FINAL_STATUSES` に含まれないため再試行される設計だが、`_run_ng_evaluation()` は
+**評価処理の中でしか呼ばれない**。失敗した応募者は `status='scanned'` になるため次回の
+スキャン対象にならず、結果として**二度と試行されない**（`--retry-errors` は `status='error'`
+が対象、`--all` は仕様上登録しない）。
+
+実害は「自動で落とされなかった」だけで安全側のため優先度は低い。**当面は失敗が出たら
+手動でHRMOSを操作する運用**とし、頻発するようなら `failed` / `no_form` だけを再試行する
+コマンドの追加を検討する（評価は済んでいるので AI 呼び出しは不要）。
+
+
 ### 低: PII マスキングの取りこぼし（主要分は対応済み）
 
 2026-09-09 に氏名・メールアドレス・郵便番号を対応済み（氏名 6人→0人、メール 18件→0件）。
@@ -228,6 +196,7 @@ Git Bash では `2>/dev/null` を使うこと。削除は PowerShell から
 
 ## 完了タスク
 
+- [2026-09-20 Claude の学習利用設定を確認](improvement_list/2026-09-20_claude_data_usage_check.md) — 結果は**対象外**。過去分も含め個人情報取扱い上の事象としての報告は不要と判断。プラン変更・別アカウントでの運用開始時は再確認が必要
 - [2026-09-20 配布ドキュメントを自動NG登録・新しい○基準に同期](improvement_list/2026-09-20_setup_docs_sync.md) — `SETUP_GUIDE.ADVANCED.html` に自動NG登録の手順を新設、1次通過判定の4値化と閾値の丸めを全配布物へ反映
 - [2026-09-09 評価モデルの明示指定とPIIマスキングの強化](improvement_list/2026-09-09_fix_llm_model_drift.md) — 「○が増えた」の原因調査（母集団の若返り＋採点ドリフト）、モデル無指定による採点の漂流、氏名・メールアドレスのマスク漏れ、○の閾値引き上げ（52%→35%）もここで対応
 - [2026-09-06 HRMOSへの自動NG評価登録](improvement_list/2026-09-06_hrmos_auto_ng_evaluation.md) — 判定不能（年齢不明・年齢帯外）と不合格の区別、`first_pass_criteria` の年齢帯の穴埋めもここで解消
