@@ -8,7 +8,7 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 > | ファイル | 内容 |
 > |---|---|
 > | [setup/SETUP_GUIDE.html](setup/SETUP_GUIDE.html) | 導入手順（受け取った人が読む） |
-> | [setup/SETUP_GUIDE.ADVANCED.html](setup/SETUP_GUIDE.ADVANCED.html) | 評価基準などの設定変更 |
+> | [setup/SETUP_GUIDE.ADVANCED.html](setup/SETUP_GUIDE.ADVANCED.html) | 設定変更（評価基準・1次通過ライン・自動NG登録など10項目） |
 > | [setup/OVERVIEW.html](setup/OVERVIEW.html) | 機能とアーキテクチャの解説 |
 > | [setup/DISTRIBUTION.md](setup/DISTRIBUTION.md) | 配る側の手順 |
 

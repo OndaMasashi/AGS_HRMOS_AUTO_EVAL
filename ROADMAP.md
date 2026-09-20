@@ -56,6 +56,24 @@ Claude Code 公式ドキュメント `https://code.claude.com/docs/en/data-usage
 auth key に差し替える。差し替え後は環境変数 `GEMINI_API_KEY` を更新し、`run.py doctor` で疎通確認する。
 
 
+### 高: 自動NG登録に失敗した応募者を拾い直す経路がない
+
+2026-09-15 17:46 に自動NG登録が1件失敗した（`hrmos_eval_status='failed'`、応募者ID
+`2305920017108647936`）。原因は**セレクタの破損ではなくページ遷移のタイムアウト**
+（`Page.goto` が3回とも `domcontentloaded` に到達せず失敗）。画面は
+`data/debug/ng_form_error_20260915_174637_811854.png` に残っている。
+
+`failed` は `FINAL_STATUSES`（`submitted` / `too_old` / `submit_uncertain`）に含まれないため
+**再試行される設計**だが、`_run_ng_evaluation()` は**評価処理の中でしか呼ばれない**。
+この応募者は既に `status='scanned'` なので次回のスキャンで評価対象にならず、
+**自動NG登録が二度と試行されない**。`--retry-errors` は `status='error'` が対象なので拾えず、
+`--all` は仕様上そもそも登録しない。
+
+実害は「自動で落とされなかった」だけで安全側だが、運用者が失敗に気づいても対処手段がない。
+対応案: `failed` / `no_form` の応募者だけを対象に自動NG登録を再試行するコマンドを足す
+（評価は済んでいるので AI 呼び出しは不要）。なお今回の応募者は `applied_at` が取れておらず、
+再試行しても「応募日時が読めないため登録しない」側に倒れる見込み。
+
 ### 高: 自動NG登録の稼働を見届ける（新しい○基準での初回を含む）
 
 2026-09-07 に本番運用へ切り替え、同日 17:30 の初回登録は正常に動いた（4名を評価し × の1名だけ登録／失敗0件）。
@@ -210,6 +228,7 @@ Git Bash では `2>/dev/null` を使うこと。削除は PowerShell から
 
 ## 完了タスク
 
+- [2026-09-20 配布ドキュメントを自動NG登録・新しい○基準に同期](improvement_list/2026-09-20_setup_docs_sync.md) — `SETUP_GUIDE.ADVANCED.html` に自動NG登録の手順を新設、1次通過判定の4値化と閾値の丸めを全配布物へ反映
 - [2026-09-09 評価モデルの明示指定とPIIマスキングの強化](improvement_list/2026-09-09_fix_llm_model_drift.md) — 「○が増えた」の原因調査（母集団の若返り＋採点ドリフト）、モデル無指定による採点の漂流、氏名・メールアドレスのマスク漏れ、○の閾値引き上げ（52%→35%）もここで対応
 - [2026-09-06 HRMOSへの自動NG評価登録](improvement_list/2026-09-06_hrmos_auto_ng_evaluation.md) — 判定不能（年齢不明・年齢帯外）と不合格の区別、`first_pass_criteria` の年齢帯の穴埋めもここで解消
 - [2026-08-25〜26 インストーラ刷新・Gemini APIキー経路・配布物とドキュメントの整備](improvement_list/2026-08-25_installer_rebuild_and_gemini_api.md) — `setup_scheduler.bat` 再実行でスリープ対策設定が失われる問題、`config.yaml.example` の `first_pass_criteria` 欠落、配布物への機密混入もここで解消

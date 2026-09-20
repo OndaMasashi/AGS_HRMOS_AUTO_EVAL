@@ -127,3 +127,4 @@ CLI (run.py: argparse)
 - PowerShell は **Windows PowerShell 5.1** 前提（配布先に PS7 は無い）。`&&` / `??` / 三項演算子は使えない。`$ErrorActionPreference='Stop'` 下ではネイティブコマンドの stderr が致命的エラーになるため、外部コマンドは `Invoke-Native` で包む
 - 配布: `setup/build_dist.ps1` で作る。手作業で zip 化しない。ビルド時に「機密の中身スキャン・入れ子の複製検出・件数チェック・必須ファイルの入れ忘れ検知・HTMLへの `<head>` 付与」が走る
 - 利用者向けドキュメントは `setup/` の3つのHTML（`SETUP_GUIDE.html` / `SETUP_GUIDE.ADVANCED.html` / `OVERVIEW.html`）が正。`README.md` は開発者向けで**配布物には含めない**。Artifact 公開用に `<title>` から始まる断片で保存しており、`<head>` はビルド時に付与される
+- **利用者が触る設定や、利用者に見える表示を変えたら、同じコミットで配布物も直す**: `config.yaml.example`（設定値とコメント）／`SETUP_GUIDE.ADVANCED.html`（設定変更の手順）／`OVERVIEW.html`（機能とファイル一覧）／`SETUP_GUIDE.html`・`DISTRIBUTION.md`（注意書き）。自動NG登録の追加（2026-09-07）と1次通過判定の4値化が配布物に反映されないまま2週間動いており、`SETUP_GUIDE.ADVANCED.html` には最も危険な設定である `hrmos_evaluation` の説明が丸ごと無かった。**開発者向けの CLAUDE.md / README だけ直して終わりにしない**

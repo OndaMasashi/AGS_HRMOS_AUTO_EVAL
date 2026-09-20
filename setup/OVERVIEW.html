@@ -392,7 +392,7 @@ footer {
           </div>
           <div>
             <h4>1次通過候補の判定</h4>
-            <p>年齢帯ごとに平均点のしきい値を決めておくと、○ / △ で候補を絞り込みます。若手とベテランで同じ物差しにならないようにするためです。</p>
+            <p>年齢帯ごとに平均点のしきい値を決めておくと、○ / △ / × / ？ の4段階で候補を絞り込みます。若手とベテランで同じ物差しにならないようにするためです。<b>× と ？ は意味が違い</b>、× は点数が基準に届かなかった人、？ は<b>年齢が分からず判定できなかった</b>人です（点数は見ていません）。</p>
           </div>
           <div>
             <h4>Excel 一覧表の出力</h4>
@@ -547,7 +547,7 @@ footer {
         <h4>Excel 一覧表</h4>
         <p>1行＝1応募者。左から順に、まず判断に効く要約が並び、右へ行くほど詳細になります。</p>
         <pre><code>応募者名 / 性別 / 年齢 / HRMOS URL / ファイル名
-  → 1次通過候補（○△）→ 平均点 → 合計点 → 総合ランク
+  → 1次通過候補（○△×？）→ 平均点 → 合計点 → 総合ランク
   → レーダーチャート → 総合評価
   → 各評価基準（点）（評価コメント）× 項目数
   → 備考欄 → 質問候補1〜3</code></pre>
@@ -588,7 +588,11 @@ footer {
 
 first_pass_criteria:          <span class="c"># 1次通過候補の判定（年齢帯ごとの平均点しきい値）</span>
   - age_range: [25, 29]
-    min_avg_score: 2.4        <span class="c"># これ以上で○、0.3 点手前まで△</span></code></pre>
+    min_avg_score: 2.6        <span class="c"># これ以上で○、0.3 点手前まで△、それ未満は×</span></code></pre>
+        <div class="note warn">
+          <span class="lb">しきい値は 0.1 刻みでは動きません</span>
+          <p>平均点は「合計点 &divide; 評価項目数」なので<b>取りうる値が飛び飛び</b>です（7項目なら 0.143 刻み）。<code>2.9</code> と <code>3.0</code> のように間に値が無い2つは同じ判定になります。動かすなら 0.2〜0.3 ずつにして、<code>run.py report</code> で実際の人数を確かめてください。</p>
+        </div>
         <p><b>description を具体的に書くほど評価が安定します。</b>項目数に制限はありませんが、増やすほど1件あたりの処理時間と費用が伸びます。</p>
         <div class="note warn">
           <span class="lb">評価基準を変えたら</span>
@@ -718,14 +722,15 @@ first_pass_criteria:          <span class="c"># 1次通過候補の判定（年�
               <tr><td class="mono">config.py</td><td>設定の読み込み・検証・環境変数での上書き</td></tr>
               <tr><td class="mono">doctor.py</td><td>環境の自己診断（10項目）</td></tr>
               <tr><td class="mono">browser/auth.py</td><td>HRMOS認証。2段階ログインとセッション有効性の判定</td></tr>
-              <tr><td class="mono">browser/navigator.py</td><td>応募者一覧の巡回と添付書類のダウンロード</td></tr>
+              <tr><td class="mono">browser/navigator.py</td><td>応募者一覧の巡回と添付書類のダウンロード（<b>読み取りのみ</b>）</td></tr>
+              <tr><td class="mono">browser/evaluation_form.py</td><td>HRMOS への自動NG評価の登録。<b>HRMOSへの書き込みはここだけ</b>に閉じている（誤って評価を登録し得る経路を1箇所に限るため）</td></tr>
               <tr><td class="mono">browser/page_utils.py</td><td>ページ遷移の共通処理（リトライ付き）</td></tr>
               <tr><td class="mono">browser/selectors.py</td><td>ページ要素のセレクタ定義。<b>HRMOSのUI変更時はここだけ直す</b></td></tr>
               <tr><td class="mono">parser/document.py</td><td>PDF / Word / Excel からのテキスト抽出</td></tr>
               <tr><td class="mono">evaluator/llm_client.py</td><td>AIプロバイダの切替</td></tr>
               <tr><td class="mono">evaluator/gemini_api_client.py</td><td>Gemini REST API 呼び出し（APIキー認証）</td></tr>
               <tr><td class="mono">evaluator/claude_client.py</td><td>Claude CLI 呼び出し</td></tr>
-              <tr><td class="mono">evaluator/pii_masker.py</td><td>送信前の個人情報マスクと、応答後の復元</td></tr>
+              <tr><td class="mono">evaluator/pii_masker.py</td><td>送信前の個人情報マスクと、応答後の復元。氏名（姓・名の単独出現を含む）・電話・住所・メールアドレス・郵便番号・生年月日の月日が対象。職歴・企業名・資格と生年月日の「年」は評価と年齢判定に要るため残す</td></tr>
               <tr><td class="mono">evaluator/prompt_builder.py</td><td>評価プロンプトの構築、ランク・1次通過判定</td></tr>
               <tr><td class="mono">evaluator/response_parser.py</td><td>JSON応答の抽出・検証・正規化</td></tr>
               <tr><td class="mono">database/models.py</td><td>SQLiteスキーマ定義と初期化</td></tr>

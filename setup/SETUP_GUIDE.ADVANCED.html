@@ -231,6 +231,7 @@ footer { border-top:2px solid var(--ink); margin-top:16px; padding-top:20px; fon
         <a class="card" href="#t7"><b>メールの宛先を増やしたい</b><span>通知を受け取る人を追加する</span></a>
         <a class="card" href="#t8"><b>経歴書の添付をやめたい</b><span>メールに個人情報を載せない</span></a>
         <a class="card" href="#t9"><b>ブラウザを表示したくない</b><span>裏で静かに実行する</span></a>
+        <a class="card" href="#t10"><b>自動NG登録を使いたい／止めたい</b><span>取り消せないため確認手順あり</span></a>
         <a class="card cd-x" href="#fix"><b>保存したら動かなくなった</b><span>エラーの読み方と元に戻す手順</span></a>
       </div>
     </section>
@@ -299,27 +300,37 @@ footer { border-top:2px solid var(--ink); margin-top:16px; padding-top:20px; fon
       <!-- 4 -->
       <div class="task" id="t4">
         <h3><span class="tn">4</span>1次通過候補の数を調整したい</h3>
-        <p>年齢帯ごとに「平均点が何点以上なら ○ にするか」を決めています。<b>0.2〜0.3 ずつ動かして調整</b>してください。</p>
+        <p>年齢帯ごとに「平均点が何点以上なら ○ にするか」を決めています。若手とベテランで同じ物差しにならないよう、年齢が上がるほど高い点を求める設定です。</p>
 <pre><code>first_pass_criteria:
   - age_range: [25, 29]
-    min_avg_score: 2.4   <span class="dim"># 下げると○が増える / 上げると減る</span></code></pre>
+    min_avg_score: 2.6   <span class="dim"># 下げると○が増える / 上げると減る</span></code></pre>
         <div class="tw">
           <table>
-            <thead><tr><th>平均点</th><th>判定</th></tr></thead>
+            <thead><tr><th>平均点</th><th>Excel の表示</th><th>意味</th></tr></thead>
             <tbody>
-              <tr><td class="mono">min_avg_score 以上</td><td><b>○</b>（候補。メール通知にも載る）</td></tr>
-              <tr><td class="mono">その 0.3 点手前まで</td><td><b>△</b>（目視で確認したい層）</td></tr>
-              <tr><td class="mono">それ未満</td><td>空欄</td></tr>
+              <tr><td class="mono">min_avg_score 以上</td><td><b>○</b></td><td>候補。メール通知にも載る</td></tr>
+              <tr><td class="mono">その 0.3 点手前まで</td><td><b>△</b></td><td>目視で確認したい層</td></tr>
+              <tr><td class="mono">それ未満</td><td><b>×</b></td><td>点数が基準に届かなかった</td></tr>
+              <tr><td class="mono">（点数を見ていない）</td><td><b>？</b></td><td>年齢が分からず判定できなかった</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="note warn">
+          <span class="label">0.1 ずつ動かしても変わらないことがあります</span>
+          <p>平均点は「合計点 &divide; 評価項目数」なので、<b>取りうる値が飛び飛び</b>になります。項目が7つなら 2.00 / 2.14 / 2.29 … と 0.143 刻みでしか出ません。</p>
+          <p style="margin-bottom:0">つまり <code>2.9</code> と <code>3.0</code> のように<b>間に値が無い2つは同じ判定</b>になります。動かすなら <b>0.2〜0.3 ずつ</b>にして、変更後に <code>run.py report</code> で実際の人数を確かめてください。</p>
         </div>
         <div class="note good">
           <span class="label">再評価は不要です</span>
           <p>これは線引きを変えるだけなので、<code>run.py report</code> で Excel を出し直せば既存の評価にすぐ反映されます。AIの費用もかかりません。</p>
         </div>
         <div class="note warn">
-          <span class="label">空欄になる2つのケース</span>
-          <p>どの <code>age_range</code> にも入らない年齢（例: 55歳以上）と、<b>書類から年齢を読み取れなかった応募者</b>は、点数に関わらず空欄になります。対象を広げたいときは年齢帯の行を追加してください。</p>
+          <span class="label">？ になる2つのケース</span>
+          <p>どの <code>age_range</code> にも入らない年齢と、<b>書類から年齢を読み取れなかった応募者</b>は、点数に関わらず <b>？</b> になります。<b>× とは意味が違います</b>（× は点数が足りなかった人、？ は点数を見ていない人）。対象を広げたいときは年齢帯の行を追加してください。</p>
+        </div>
+        <div class="note danger">
+          <span class="label">自動NG登録を使っている場合は先に読んでください</span>
+          <p style="margin-bottom:0"><b>しきい値を上げると、HRMOS へ自動で NG 登録される人が増えます</b>（△ だった人が × に変わるため）。この機能を有効にしているなら、<a href="#t10">手順10</a> の確認手順に従ってください。</p>
         </div>
       </div>
 
@@ -386,6 +397,56 @@ footer { border-top:2px solid var(--ink); margin-top:16px; padding-top:20px; fon
         <div class="note warn">
           <span class="label">触らない方がよい項目</span>
           <p><code>wait_between_pages</code>（既定 2秒）は HRMOS への負荷を抑えるための待ち時間です。<b>短くしないでください。</b></p>
+        </div>
+      </div>
+
+      <!-- 10 -->
+      <div class="task" id="t10">
+        <h3><span class="tn">10</span>HRMOS への自動NG登録を使いたい／止めたい</h3>
+        <p>○ にならなかった応募者を、HRMOS の応募者ページで自動的に「NG」評価にする機能です。<b>初期状態では無効</b>になっています。</p>
+<pre><code>hrmos_evaluation:
+  enabled: <span class="hi">false</span>       <span class="dim"># true で有効になる</span>
+  dry_run: <span class="hi">true</span>        <span class="dim"># true なら登録の直前まで進んでログに出すだけ</span>
+  max_per_run: 20      <span class="dim"># 1回の実行で登録する上限（設定ミス時の大量登録を防ぐ）</span>
+  max_age_days: 3      <span class="dim"># 応募からこの日数以内の人だけを対象にする</span>
+  comment: "自動評価"  <span class="dim"># 評価コメント欄に入る文言</span></code></pre>
+
+        <div class="note danger">
+          <span class="label">登録した評価は取り消せません</span>
+          <p>HRMOS の選考タイムラインに残り、<b>画面上に取り消しの導線が見当たりません</b>（実機で確認済み）。元に戻せない前提で使ってください。</p>
+          <p style="margin-bottom:0">また <b>AI の点数だけで不合格を確定させる運用は、AI提供各社の利用規約に反します</b>。採用選考は「高リスク用途」とされ、有資格者が事前に内容を確認することが条件です。有効化は採用責任者の承認を得たうえで、登録済みの応募者を定期的に人が確認する運用とセットにしてください。</p>
+        </div>
+
+        <h4>使い始めるときの手順</h4>
+        <ol>
+          <li><code>enabled: true</code> にする。<b><code>dry_run</code> は <code>true</code> のまま</b>にしておく</li>
+          <li>1回実行して、ログとメールに出る「対象者の内訳」が想定どおりか確認する</li>
+          <li>問題なければ <code>dry_run: false</code> にする</li>
+        </ol>
+        <p><code>dry_run: true</code> のときは<b>登録の直前まで操作して、実際には登録しません</b>。設定を変えずに同じ確認をしたいときは、実行時に <code>--dry-run</code> を付けても同じです。</p>
+
+        <div class="note warn">
+          <span class="label">しきい値を変えた直後は必ず確認してください</span>
+          <p style="margin-bottom:0"><a href="#t4">手順4</a> で ○ の基準を<b>上げる</b>と、これまで △ だった人が × に変わり、<b>自動NG登録の対象が増えます</b>。基準を変えたら一度 <code>dry_run: true</code> に戻し、対象者を確かめてから戻すのが安全です。</p>
+        </div>
+
+        <h4>対象にならない人</h4>
+        <div class="tw">
+          <table>
+            <thead><tr><th>状況</th><th>扱い</th></tr></thead>
+            <tbody>
+              <tr><td>1次通過候補が <b>○</b></td><td>対象外（毎回判定し直す）</td></tr>
+              <tr><td>年齢が分からない／年齢帯の設定範囲外（<b>？</b>）</td><td><b>対象外</b>。点数を見ずに落とさないための仕組み</td></tr>
+              <tr><td>応募から <code>max_age_days</code> より古い</td><td>対象外（以降スキップ）</td></tr>
+              <tr><td>既に誰かが評価済み／選考が締切</td><td>対象外（以降スキップ）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><code>run.py scan --all</code>（全員の再評価）では登録しません。同じ人に二重登録されないよう、結果は内部に記録されます。</p>
+
+        <div class="note good">
+          <span class="label">止めたいとき</span>
+          <p style="margin-bottom:0"><code>dry_run</code> を <code>true</code> に戻せば<b>登録だけ止まります</b>（評価とレポートは通常どおり動きます）。機能ごと止めるなら <code>enabled: false</code> にしてください。</p>
         </div>
       </div>
     </section>
