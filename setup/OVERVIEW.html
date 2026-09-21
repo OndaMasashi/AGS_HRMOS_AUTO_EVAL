@@ -571,7 +571,7 @@ footer {
         <p>評価サマリ表と Excel が届きます。表の「○」は HRMOS の応募者ページへのリンクになっており、そのままクリックで開けます。1次通過候補の経歴書を添付することもできます（個人情報を含むため、社内ポリシーを確認のうえで）。</p>
         <p>送られるのは次の3種類です。<b>いずれの場合も必ず何かが届く</b>ため、届かない＝異常と判断できます。</p>
         <ul>
-          <li><b>評価結果メール</b> — 新規応募者を1名以上評価できたとき</li>
+          <li><b>評価結果メール</b> — 新規応募者を1名以上評価できたとき。評価できなかった応募者がいれば、名前・理由・HRMOSへのリンクも載る</li>
           <li><b>「新規なし」通知</b> — 新規0名で正常に終わったとき</li>
           <li><b>失敗アラート</b> — 認証失敗・一覧0件・評価成功0件・処理中の例外</li>
         </ul>
@@ -953,7 +953,7 @@ first_pass_criteria:          <span class="c"># 1次通過候補の判定（年�
               <tr><td class="mono">browser/page_utils</td><td>ページ遷移の失敗</td><td>最大3回まで再試行</td></tr>
               <tr><td class="mono">parser/document</td><td>解析失敗</td><td>空テキストを返し、その応募者をスキップ</td></tr>
               <tr><td class="mono">evaluator</td><td>タイムアウト / API エラー</td><td>最大3回リトライ後スキップ（<code>status='error'</code>）</td></tr>
-              <tr><td class="mono">evaluator</td><td>JSONパース失敗</td><td>同上</td></tr>
+              <tr><td class="mono">evaluator</td><td>JSONパース失敗（AIが評価を断った場合を含む）</td><td>スキップ（<code>status='error'</code>）し、AIの応答全文をログに残す。評価結果メールに「評価できなかった応募者」として載る</td></tr>
               <tr><td class="mono">reporter/notify</td><td>メール送信失敗</td><td>ログのみ。評価結果には影響しない</td></tr>
             </tbody>
           </table>

@@ -54,6 +54,12 @@ PROVIDER_LABELS = {
     "gemini": "Gemini CLI",
 }
 
+# 評価できなかった応募者の理由（結果メールに出す）
+FAIL_NO_TEXT = "書類の文字を読み取れなかった"
+FAIL_UNPARSABLE = "AIの応答を評価結果として読めなかった（評価を断った可能性）"
+FAIL_LLM = "AIの呼び出しに失敗した"
+FAIL_OTHER = "処理中にエラーが発生した"
+
 # 自動NG評価登録の集計ラベル（表示順）。evaluation_form の結果コードに
 # 「登録を試みるまでもなく対象外だった」ケースを足したもの
 NG_UNDETERMINED = "undetermined"  # 年齢から判定できず（年齢不明・年齢帯外）
@@ -329,6 +335,10 @@ async def run_scan(
     total_applicants = 0
     scanned_count = 0
     eval_count = 0
+    # 今回評価できなかった応募者。status='error' は通常の scan で再試行されず、
+    # 1人でも評価に成功すると失敗アラートも出ないため、結果メールに載せないと
+    # 誰にも気づかれずに残る（2026-09-16/17 に HRMOS のリマインダーで初めて発覚した）
+    failed_applicants: list[dict] = []
 
     try:
         async with async_playwright() as p:
@@ -381,6 +391,8 @@ async def run_scan(
                 if rescan_all:
                     repo.delete_evaluations_for_applicant(app_id)
 
+                # 前の応募者の応答を失敗時のログに出さないよう、毎回空に戻す
+                raw_response = ""
                 try:
                     # 添付ファイル情報を取得
                     attachments = await get_attachment_links(page, app_url)
@@ -423,6 +435,9 @@ async def run_scan(
                     if not combined_text or last_doc_id is None:
                         logger.warning(f"  テキスト抽出失敗 ({app_name}): 書類はあるがテキストを取得できず")
                         repo.mark_applicant_error(app_id)
+                        failed_applicants.append(
+                            {"name": app_name, "page_url": app_url, "reason": FAIL_NO_TEXT}
+                        )
                         continue
 
                     # PIIマスキング: LLM送信前に個人情報をプレースホルダーに置換
@@ -489,11 +504,23 @@ async def run_scan(
 
                 except (LLMClientError, ParseError) as e:
                     logger.error(f"  AI評価エラー ({app_name}): {e}")
+                    if isinstance(e, ParseError) and raw_response:
+                        # ParseError のメッセージは応答の先頭300字で切れる。AI が評価を
+                        # 断ったときの理由を後から読めるよう全文を残す（Claude CLI は
+                        # 会話を保存しない設定で呼んでいるため、ここが唯一の記録になる）
+                        logger.error(f"  AIの応答全文 ({app_name}):\n{raw_response}")
                     repo.mark_applicant_error(app_id)
+                    reason = FAIL_UNPARSABLE if isinstance(e, ParseError) else FAIL_LLM
+                    failed_applicants.append(
+                        {"name": app_name, "page_url": app_url, "reason": reason}
+                    )
 
                 except Exception as e:
                     logger.error(f"  応募者 {app_name} の処理でエラー: {e}")
                     repo.mark_applicant_error(app_id)
+                    failed_applicants.append(
+                        {"name": app_name, "page_url": app_url, "reason": FAIL_OTHER}
+                    )
 
                 # ページ間の待機
                 await asyncio.sleep(wait_sec)
@@ -546,6 +573,7 @@ async def run_scan(
                     total_applicants, scanned_count,
                     attachment_sources=attachment_sources,
                     ng_summary=ng_summary,
+                    failed_applicants=failed_applicants,
                 )
             except Exception as e:
                 logger.error(f"メール通知でエラー: {e}")
@@ -562,12 +590,14 @@ async def run_scan(
             logger.error(
                 f"評価対象 {len(targets)} 名を処理しましたが、AI評価成功は0件でした。"
             )
-            _notify_failure(
-                config,
+            failure_reason = (
                 f"評価対象 {len(targets)} 名を処理しましたが、AI評価に成功した応募者が0名でした"
-                f"（全員エラー、または添付書類なし）。LLM CLI・添付取得・書類解析を要確認",
-                total_applicants,
+                f"（全員エラー、または添付書類なし）。LLM CLI・添付取得・書類解析を要確認"
             )
+            failed_names = "、".join(failed["name"] for failed in failed_applicants)
+            if failed_names:
+                failure_reason += f"。評価できなかった応募者: {failed_names}"
+            _notify_failure(config, failure_reason, total_applicants)
 
     except Exception as e:
         logger.error(f"評価処理で致命的エラー: {e}")

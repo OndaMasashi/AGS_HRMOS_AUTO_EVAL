@@ -116,6 +116,161 @@ class TestAddressMasking:
         assert "1丁目2番3号" not in result
         assert "ABCマンション101" not in result  # 建物名も番地以降に含まれる
 
+    # ハイフンで書いた番地は実データで最も多い書き方（2026-09-21 に 399 行が素通りしていた）
+    def test_hyphen_banchi_with_building(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都中野区本町3-5-8 サンプルハイツ202")
+        assert "3-5-8" not in result
+        assert "サンプルハイツ202" not in result
+        assert "東京都中野区本町" in result
+        assert masker.mapping_summary["ADDR"] == 1
+
+    def test_chome_with_hyphen(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("神奈川県横浜市港北区日吉2丁目4-6")
+        assert "2丁目4-6" not in result
+        assert "神奈川県横浜市港北区日吉" in result
+
+    def test_fullwidth_hyphen_banchi(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("埼玉県さいたま市浦和区高砂１－２－３")
+        assert "１－２－３" not in result
+        assert "埼玉県さいたま市浦和区高砂" in result
+
+    def test_long_vowel_as_hyphen_from_pdf(self):
+        # PDF から取り出すとハイフンが長音符に化けることがある
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("静岡県静岡市葵区見本町9ー6ー1")
+        assert "9ー6ー1" not in result
+        assert "静岡県静岡市葵区見本町" in result
+
+    def test_two_part_hyphen_banchi(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("千葉県千葉市中央区富士見12-3")
+        assert "12-3" not in result
+
+    def test_career_years_after_prefecture_are_kept(self):
+        # 職歴の年は在籍期間の評価に要るので消さない
+        masker = PiiMasker(applicant_name="")
+        text = "東京都港区 2019-2021 受託開発企業にて勤務"
+        assert masker.mask(text) == text
+
+    def test_career_line_without_banchi_is_kept(self):
+        masker = PiiMasker(applicant_name="")
+        text = "2019年4月～2021年3月 東京都港区の受託開発企業に勤務"
+        assert masker.mask(text) == text
+
+    def test_stops_before_other_placeholder(self):
+        # 同じ行の電話番号の置換結果を住所の中に取り込まず、元に戻せること
+        masker = PiiMasker(applicant_name="")
+        text = "東京都中野区本町3-5-8 090-1234-5678"
+        result = masker.mask(text)
+        assert "[PHONE_001]" in result
+        assert "[ADDR_001]" in result
+        assert masker.unmask(result) == text
+
+    # 番地から行末までを消すと、PDF で同じ行に並んだ職歴・学歴まで消える
+    # （点数が下がると取り消せない自動NG登録につながる）
+    def test_career_on_same_line_is_kept(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("大阪府大阪市北区梅田2-4-9 A社 2018-2020 営業")
+        assert "2-4-9" not in result
+        assert "A社 2018-2020 営業" in result
+
+    def test_education_on_same_line_is_kept(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("住所 東京都港区芝浦1-2-3 学歴 2015年3月 サンプル大学卒業")
+        assert "1-2-3" not in result
+        assert "学歴 2015年3月 サンプル大学卒業" in result
+
+    def test_career_after_banchi_go_is_kept(self):
+        # 既存の「番」「号」の書き方も同じく建物名までで止める
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都港区芝5丁目7番1号 A社 2018-2020")
+        assert "5丁目7番1号" not in result
+        assert "A社 2018-2020" in result
+
+    def test_building_and_room_after_space_are_masked(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都中野区本町3-5-8 メゾンサンプル 405")
+        assert "メゾンサンプル" not in result
+        assert "405" not in result
+
+    def test_career_sentence_without_space_is_kept(self):
+        # 日本語の文は空白で区切られないので、番地に直接続く職歴も守る
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都港区芝5-7-1、株式会社サンプルにてPM")
+        assert "5-7-1" not in result
+        assert "、株式会社サンプルにてPM" in result
+
+    def test_particle_after_banchi_is_kept(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都港区芝5-7-1の本社にて勤務")
+        assert "の本社にて勤務" in result
+
+    def test_building_without_keyword_but_room_number_is_masked(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都杉並区本町1-2-3 コスモ見本101")
+        assert "コスモ見本101" not in result
+
+    def test_company_name_with_number_is_kept(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都港区芝1-2-3 サンプルシステム2 勤務")
+        assert "サンプルシステム2 勤務" in result
+
+    def test_company_attached_to_banchi_is_kept(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都港区芝浦3-4-1株式会社サンプル 営業部")
+        assert "3-4-1" not in result
+        assert "株式会社サンプル 営業部" in result
+
+    def test_company_attached_to_banchi_go_is_kept(self):
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("大阪府大阪市北区梅田1丁目2番3号株式会社サンプル営業部長")
+        assert "1丁目2番3号" not in result
+        assert "株式会社サンプル営業部長" in result
+
+    def test_company_building_is_kept(self):
+        # 建物の目印（ビル）を含んでいても、会社名なら職歴として残す
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都大田区蒲田5-13-26 株式会社ABC本社ビル")
+        assert "5-13-26" not in result
+        assert "株式会社ABC本社ビル" in result
+
+    def test_building_starting_with_ka_is_masked(self):
+        # 「ヶ月」「カ月」の判定が、カで始まる建物名を巻き込まないこと
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都中野区本町3-5-8カーサ見本101")
+        assert "3-5-8" not in result
+        assert "カーサ見本101" not in result
+
+    def test_number_ranges_in_career_are_kept(self):
+        masker = PiiMasker(applicant_name="")
+        for text in [
+            "東京都港区の企業で2-3年勤務",
+            "東京都港区の企業で3-4名をマネジメント",
+            "東京都港区 15-18期 在籍",
+            "東京都港区の企業で6-8ヶ月の案件を担当",
+        ]:
+            assert masker.mask(text) == text, text
+
+    def test_kanji_ichiban_in_career_is_kept(self):
+        masker = PiiMasker(applicant_name="")
+        text = "東京都渋谷区のWeb制作会社で一番の売上を達成"
+        assert masker.mask(text) == text
+
+    def test_japanese_era_years_are_kept(self):
+        masker = PiiMasker(applicant_name="")
+        text = "東京都港区 H31-R3 勤務"
+        assert masker.mask(text) == text
+
+    def test_kanji_town_name_is_kept(self):
+        # 「六番町」は町名。番地の 6-2 だけを消す
+        masker = PiiMasker(applicant_name="")
+        result = masker.mask("東京都千代田区六番町6-2")
+        assert "東京都千代田区六番町" in result
+        assert "6-2" not in result
+
 
 # ================================================================
 #  アンマスキング

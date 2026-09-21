@@ -3,7 +3,9 @@
 import logging
 import os
 import subprocess
+import tempfile
 import time
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,24 @@ MAX_TEXT_CHARS = 80000
 # config.yaml の evaluation.model が未設定のときに使うモデル。
 # エイリアス（sonnet / opus）で書くと、その時点の各世代の既定モデルに解決される。
 DEFAULT_MODEL = "sonnet"
+
+# claude -p を起動する作業フォルダ。プロジェクトの外（%TEMP%）に置く。
+# Claude CLI は起動フォルダとその親をさかのぼって CLAUDE.md を読み込むため、
+# プロジェクト配下で起動すると開発用の CLAUDE.md（自動NG登録や年齢の閾値の説明）が
+# 評価の文脈に混ざり、採点がそれに左右されるうえ、それを理由に評価を拒否される
+# （2026-09-16/17 に実際に発生）。呼び出しごとに別名にすると ~/.claude/projects/ に
+# フォルダが増えていくため、固定の名前で使い回す。
+# ~/.claude/CLAUDE.md（ユーザー全体の設定）はフォルダを変えても外れない可能性がある
+# （2026-09-21 の確認では AI は「文脈に無い」と答えたが、自己申告なので確証ではない）。
+# 確実に外せる --bare は APIキー認証が必須で、対話ログインで動かす本ツールでは使えない。
+ISOLATED_WORKDIR_NAME = "hrmos_auto_eval_llm"
+
+
+def _isolated_workdir() -> Path:
+    """claude -p を起動する、プロジェクト外の作業フォルダを返す"""
+    workdir = Path(tempfile.gettempdir()) / ISOLATED_WORKDIR_NAME
+    workdir.mkdir(exist_ok=True)
+    return workdir
 
 
 class ClaudeClientError(Exception):
@@ -34,7 +54,21 @@ def call_claude(prompt: str, config: dict) -> str:
     # 変わってしまう。実際、2026-09-09 に既定モデルが CLI の対応外バージョンへ
     # 変わり、claude -p が API Error 400 で全件失敗する状態になった。
     model = eval_config.get("model") or DEFAULT_MODEL
-    cmd = ["claude", "-p", "--model", model]
+    # --no-session-persistence: 書類本文を含む会話が ~/.claude/projects/ に保存され
+    #   続けるのを止める（評価結果の全文は DB の raw_response に残る）。
+    # --tools "": 評価役にファイル読み取り等の道具を持たせない。書類本文は外部から
+    #   来た文章なので、そこに書かれた指示で config.yaml 等を読まれないようにする。
+    #   値を複数取れるオプションなので、後ろの引数を吸い込まないよう必ず最後に置く
+    #   （プロンプトは標準入力で渡すため位置引数は無い）。
+    #   作業フォルダに置いたファイルを読めないことは実機で確認済み（2026-09-21）。
+    # --safe-mode は付けない。MCP 等も止まる触れ込みだが、実機では併用すると
+    #   道具を使ったかのような架空の結果を AI が作文した（ファイルは読めていない）。
+    #   採点の根拠に作り話が混ざるおそれがある。
+    cmd = [
+        "claude", "-p", "--model", model,
+        "--no-session-persistence", "--tools", "",
+    ]
+    workdir = _isolated_workdir()
 
     last_error = None
 
@@ -55,6 +89,7 @@ def call_claude(prompt: str, config: dict) -> str:
                 encoding="utf-8",
                 shell=use_shell,
                 env=env,
+                cwd=workdir,
             )
 
             if result.returncode != 0:

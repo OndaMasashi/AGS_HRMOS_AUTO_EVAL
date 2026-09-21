@@ -126,6 +126,7 @@ def send_report_email(
     scanned_count: int,
     attachment_sources: list[dict] | None = None,
     ng_summary: str = "",
+    failed_applicants: list[dict] | None = None,
 ) -> bool:
     """AI評価結果をメールで送信する
 
@@ -135,6 +136,9 @@ def send_report_email(
             1次通過候補(○)の経歴書のみを想定（呼び出し側で抽出済み）。
         ng_summary: HRMOSへの自動NG評価登録の結果を1行にまとめた文字列。
             機能が無効なら空文字（本文には出さない）。
+        failed_applicants: 今回評価できなかった応募者のリスト。
+            各要素は {"name": str, "page_url": str, "reason": str}。
+            空なら件名・本文に何も出さない。
 
     Returns:
         True: 送信成功, False: 送信失敗またはスキップ
@@ -150,11 +154,14 @@ def send_report_email(
     eval_count = len(set(ev["applicant_id"] for ev in evaluations))
 
     first_pass_criteria = config.get("first_pass_criteria", [])
+    failed_applicants = failed_applicants or []
 
-    subject = f"{prefix} AI評価完了 {eval_count}名 ({today})"
+    # 評価できなかった人がいるときは件名にも出す（本文を開かなくても気づけるように）
+    failed_part = f"・評価できず {len(failed_applicants)}名" if failed_applicants else ""
+    subject = f"{prefix} AI評価完了 {eval_count}名{failed_part} ({today})"
     html_body = _build_html(
         evaluations, criteria_names, total_applicants, scanned_count,
-        today, first_pass_criteria, ng_summary,
+        today, first_pass_criteria, ng_summary, failed_applicants,
     )
 
     attachments = []
@@ -254,6 +261,33 @@ def send_failure_email(
     return _send_email(config, subject, html_body)
 
 
+def _build_failed_html(failed_applicants: list[dict]) -> str:
+    """評価できなかった応募者の警告枠を生成する（いなければ空文字）
+
+    この応募者は status='error' になり、通常の scan では再評価されない。
+    人が HRMOS で直接評価する必要があるため、応募者ページへのリンクを付ける。
+    """
+    if not failed_applicants:
+        return ""
+
+    items = ""
+    for applicant in failed_applicants:
+        name = html.escape(applicant.get("name") or "不明")
+        page_url = applicant.get("page_url") or ""
+        if page_url:
+            name = f"<a href='{html.escape(page_url, quote=True)}'>{name}</a>"
+        reason = html.escape(applicant.get("reason") or "")
+        items += f"<li>{name} — {reason}</li>"
+
+    return (
+        '\n  <div style="margin: 16px 0; padding: 8px 12px; background-color: #fdecea; '
+        'border-left: 4px solid #C0392B; font-size: 13px;">'
+        f"<b>⚠ 評価できなかった応募者 {len(failed_applicants)}名</b>"
+        "（自動では再評価されません。HRMOSで直接評価してください）"
+        f"<ul style='margin: 4px 0;'>{items}</ul></div>"
+    )
+
+
 def _build_html(
     evaluations: list[dict],
     criteria_names: list[str],
@@ -262,6 +296,7 @@ def _build_html(
     today: str,
     first_pass_criteria: list[dict],
     ng_summary: str,
+    failed_applicants: list[dict] | None = None,
 ) -> str:
     """メール本文のHTMLを生成する"""
     # 応募者ごとにグルーピング（評価基準ごとの点数・コメントも集約）
@@ -345,6 +380,9 @@ def _build_html(
             f"</tr>\n"
         )
 
+    # 評価できなかった応募者（いなければ出さない）
+    failed_html = _build_failed_html(failed_applicants or [])
+
     # HRMOSへの自動NG評価登録の結果（機能が無効なら出さない）
     ng_summary_html = ""
     if ng_summary:
@@ -361,7 +399,7 @@ def _build_html(
     <tr><td style="padding: 4px 12px;">スキャン対象</td><td><strong>{total_applicants}名</strong></td></tr>
     <tr><td style="padding: 4px 12px;">処理済み</td><td><strong>{scanned_count}名</strong></td></tr>
     <tr><td style="padding: 4px 12px;">評価完了</td><td><strong>{eval_count}名</strong></td></tr>
-  </table>{ng_summary_html}
+  </table>{failed_html}{ng_summary_html}
 
   <h3>評価サマリ</h3>
   <div style="overflow-x: auto;">

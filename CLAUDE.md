@@ -50,7 +50,7 @@ powershell -ExecutionPolicy Bypass -File setup\build_dist.ps1
 
 AI を呼び出すのは `scan` と `doctor`（`--skip-llm` なし）のみ。`report` / `status` / `doctor --skip-llm` は課金が発生しない。
 
-テストは `tests/` に2件: `test_pii_masker.py`（PII マスキング）と `test_first_pass.py`（1次通過判定の4値と応募日時のパース）。**pytest は `requirements.txt` に含まれない**（配布先には不要なため）。開発機の `.venv` には 2026-09-09 に導入済みで `.venv\Scripts\python.exe -m pytest tests/ -q` で56件が走る。新しい環境では `pip install pytest` が要る。`test_first_pass.py` は pytest 固有の機能（fixture / parametrize）を使っていないので、クラスを直接インスタンス化してメソッドを呼ぶだけでも検証できる。
+テストは `tests/` に4ファイル: `test_pii_masker.py`（PII マスキング）、`test_first_pass.py`（1次通過判定の4値と応募日時のパース）、`test_claude_client.py`（Claude CLI の起動引数と起動フォルダ）、`test_notify.py`（結果メールの「評価できなかった応募者」）。**pytest は `requirements.txt` に含まれない**（配布先には不要なため）。開発機の `.venv` には 2026-09-09 に導入済みで `.venv\Scripts\python.exe -m pytest tests/ -q` で91件が走る。新しい環境では `pip install pytest` が要る。`test_first_pass.py` は pytest 固有の機能（fixture / parametrize）を使っていないので、クラスを直接インスタンス化してメソッドを呼ぶだけでも検証できる。
 
 ## Architecture
 
@@ -63,7 +63,7 @@ CLI (run.py: argparse)
   |    ├→ parser/    : PDF(pdfplumber) / DOCX(python-docx) / XLSX(openpyxl) → テキスト
   |    ├→ evaluator/ : PII マスキング → プロンプト構築 → LLM 呼び出し → JSON パース
   |    ├→ database/  : SQLite (Repository パターン)
-  |    └→ reporter/  : Excel 出力（レーダーチャート・ランク色付き）+ Resend メール通知（評価結果サマリ・新規0件通知・失敗アラート）
+  |    └→ reporter/  : Excel 出力（レーダーチャート・ランク色付き）+ Resend メール通知（評価結果サマリ＋評価できなかった応募者・新規0件通知・失敗アラート）
   └→ doctor.py: 環境の自己診断（各層を横断して「実際に使えるか」を検証）
 ```
 
@@ -76,13 +76,15 @@ CLI (run.py: argparse)
 | provider | 実装 | 認証 | 備考 |
 |---|---|---|---|
 | `gemini_api` | `gemini_api_client.py` | 環境変数 `GEMINI_API_KEY` | REST API を urllib で直接呼ぶ。CLI・Node.js 不要で無人実行に強い。**既定** |
-| `claude` | `claude_client.py` | Claude CLI の対話ログイン | `subprocess.run(["claude","-p","--model",…])`。npm 版は `claude.cmd` になり CreateProcess が解決できないため **ネイティブ版（`claude.exe`）が必要** |
+| `claude` | `claude_client.py` | Claude CLI の対話ログイン | `subprocess.run(["claude","-p","--model",…,"--no-session-persistence","--tools",""], cwd=%TEMP%\hrmos_auto_eval_llm)`。npm 版は `claude.cmd` になり CreateProcess が解決できないため **ネイティブ版（`claude.exe`）が必要** |
 | `gemini` | `gemini_client.py` | Gemini CLI | **非推奨**。個人アカウント向け提供は 2026-06-18 に終了 |
 
-- PII マスキング (`pii_masker.py`): LLM送信前に氏名・電話・住所・メールアドレス・郵便番号・生年月日の月日をマスクし、応答後にアンマスク。氏名は**フルネームだけでなく姓・名の単独出現も**対象にする（フルネームだけ消しても実データ20人中6人で姓か名が素通りしていた）。**職歴・所属企業名・資格・生年月日の「年」はマスクしない**（評価と年齢判定に必要なため）。姓・名の単独マスクは企業名・学校名を示す語（`_CORP_HINT`）が近くにある箇所を除外し、1文字の姓・名は一般的な語と衝突するため対象外。マスクの順序にも依存があり、`090-1111-2222` の前半は郵便番号と同じ形なので**電話番号を郵便番号より先に**処理する
+- PII マスキング (`pii_masker.py`): LLM送信前に氏名・電話・住所・メールアドレス・郵便番号・生年月日の月日をマスクし、応答後にアンマスク。氏名は**フルネームだけでなく姓・名の単独出現も**対象にする（フルネームだけ消しても実データ20人中6人で姓か名が素通りしていた）。**職歴・所属企業名・資格・生年月日の「年」はマスクしない**（評価と年齢判定に必要なため）。姓・名の単独マスクは企業名・学校名を示す語（`_CORP_HINT`）が近くにある箇所を除外し、1文字の姓・名は一般的な語と衝突するため対象外。マスクの順序にも依存があり、`090-1111-2222` の前半は郵便番号と同じ形なので**電話番号を郵便番号より先に**処理する。住所は番地以降だけを消し、都道府県・市区町村・町名は残す。**番地をハイフンで書く形（`2-14-23` / `2丁目14-23`）が実データで最も多い**ため、都道府県＋市区町村を目印に拾っている（それまでは「番」「番地」を含む書き方しか拾えず、444書類で399行が素通りしていた）。PDF からの取り出しでハイフンが長音符（ー）に化けることがあるので、住所に限ってそれもハイフン扱いにする。**番地のあとは建物名・部屋番号までで止め、行末までは消さない**（PDF では住所と職歴・学歴が同じ行に並ぶことがあり、行末まで消すと職歴が AI から見えなくなる。点数が下がれば取り消せない自動NG登録につながる）。止める位置は `_end_of_building()` が決める。番地とみなさないもの（西暦・和暦・「丁目」が続かない漢数字・直後に「年」「名」「期」などの単位が続く数の範囲）と、建物名とみなさない語（会社名・学校名・事業所の手がかり）はテストで固定してある。**住所パターンを変えたら、実データでの残り件数と職歴の巻き込みを測り直すこと**（2回のレビューでどちらも職歴を消す不具合が見つかった）
 - リトライ: 最大3回（`max_retries`）、タイムアウト300秒
 - テキスト切り詰め: 80,000文字上限（`claude_client.MAX_TEXT_CHARS` のハードコード。`config.yaml` の `max_text_chars` は参照されていない）
 - Claude CLI 呼び出し時は環境変数 `CLAUDECODE` を除去（ネストセッション防止）
+- **Claude CLI はプロジェクトの外（`%TEMP%\hrmos_auto_eval_llm`）で起動する**。CLI は起動フォルダから親をさかのぼって CLAUDE.md を読むため、プロジェクト配下で起動するとこのファイル（自動NG登録や年齢の閾値の説明）が評価の文脈に混ざる。2026-09-16/17 にはそれを理由に評価を拒否され、2名が未評価のまま放置された。あわせて `--no-session-persistence`（書類本文を含む会話を `~/.claude/projects/` に残さない）と `--tools ""`（書類に書かれた指示でファイルを読ませない）を付けている。`--tools` は値を複数取るので**必ず最後の引数にする**。**`--safe-mode` は付けない**（実機で併用すると、道具を使ったかのような架空の結果を AI が作文した）。`~/.claude/CLAUDE.md` が外れているかは未確定（AI は「無い」と答えたが自己申告。確実に外せる `--bare` は APIキー認証が必須で使えない）
+- 会話を保存しないため、AI の応答を評価結果として読めなかったときは**応答の全文を `data/logs/` に出す**（`ParseError` のメッセージは先頭300字で切れる）。評価できなかった応募者は結果メールに名前・理由・HRMOSへのリンクつきで載る（`status='error'` は通常の scan で再試行されないため）
 - LLM を呼ぶ箇所はコード全体で `main.py`（評価）と `doctor.py`（疎通確認）の2箇所のみ
 
 ### 設定の検証

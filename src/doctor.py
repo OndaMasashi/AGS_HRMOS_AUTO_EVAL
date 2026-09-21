@@ -183,7 +183,11 @@ def _check_llm(config: dict | None) -> tuple[str, str, str]:
     except LLMClientError as e:
         first_line = str(e).splitlines()[0]
         hint = ""
-        if provider == "claude":
+        if provider == "claude" and "unknown option" in str(e):
+            # 評価時に付ける起動オプション（--no-session-persistence 等）を
+            # 古い CLI が認識できない場合
+            hint = " Claude CLI が古い可能性があります。claude update で更新してください。"
+        elif provider == "claude":
             hint = " claude を一度手で起動してブラウザ認証を完了してください。"
         elif provider == "gemini_api":
             hint = " 環境変数 GEMINI_API_KEY と、キーの課金設定を確認してください。"

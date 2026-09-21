@@ -35,6 +35,76 @@ _BIRTH_DATE_PATTERN = re.compile(
     re.DOTALL,
 )
 
+# 都道府県・市区町村のあとに来る番地（「高円寺北2-14-23」「2丁目14-23」）。
+# 番地だけを消し、都道府県・市区町村・町名は残す（地域は評価に影響しないため）。
+# - 番地の先頭が西暦（2019-2021 等）のものは職歴の年なので対象外
+# - 番地の直前が英字のもの（和暦の H31-R3 等）も対象外
+# - 漢数字は「六丁目」のように丁目が続くときだけ番地とみなす
+#   （「一番の売上」の「一番」や、町名の「六番町」を消さないため）
+# - 直後に単位が続くもの（「2-3年勤務」「3-4名」「15-18期」）は数の範囲なので対象外。
+#   数字・ハイフンも末尾の条件に入れているのは、正規表現が後戻りして
+#   「15-1」のような途中までを番地として拾わないようにするため
+# - PDF から取り出すとハイフンが長音符（ー / ｰ）に化けることがあるため、
+#   都道府県・市区町村の直後に限ってそれもハイフンとして扱う
+_PREFECTURE = r'(?:東京都|北海道|京都府|大阪府|[一-龥]{2,3}県)'
+_ADDRESS_DASH_CLASS = f'[{_DASH_CHARS}ーｰ]'
+_ADDRESS_AFTER_CITY_PATTERN = re.compile(
+    rf'{_PREFECTURE}[^\n]{{0,20}}?[市区町村郡][^\n0-9０-９]{{0,15}}?'
+    rf'((?<![A-Za-zＡ-Ｚａ-ｚ])(?!(?:19|20|１９|２０)\d{{2}}\D)'
+    rf'(?:[0-9０-９]+(?:丁目|番地?|{_ADDRESS_DASH_CLASS})|[一二三四五六七八九十]+丁目)'
+    rf'(?:[0-9０-９]+|丁目|番地?|号|[のノ](?=[0-9０-９])|{_ADDRESS_DASH_CLASS})*'
+    rf'(?![0-9０-９{_DASH_CHARS}ーｰ年月名人期社件歳才%％割倍回日時万億千台枚個週次代位点級]'
+    rf'|[ヶかカケヵ]月))'
+)
+
+# 番地のあとに続けて消す建物名・部屋番号。番地から行末までを消すと、PDF で
+# 同じ行に並んだ職歴・学歴まで AI から見えなくなる（点数が下がると取り消せない
+# 自動NG登録につながる）ため、建物名・部屋番号に見えない語が来たらそこで止める。
+# 目印の無い建物名は残るが、番地が消えていれば個人の特定にはつながりにくい。
+_BUILDING_WORD = re.compile(
+    r'ハイツ|マンション|アパート|コーポ|メゾン|ハイム|レジデンス|ハウス|ヴィラ|荘|ビル|号室|階'
+)
+# 建物名とみなさない語（会社名・学校名・事業所）。「株式会社ABC本社ビル」のように
+# 建物の目印を含んでいても、職歴として残す
+_NOT_BUILDING = re.compile(
+    rf'{_CORP_HINT.pattern}|本社|支社|支店|営業所|事業所|工場|研究所|開発|事業部|営業部'
+)
+_ROOM_NUMBER = re.compile(r'[A-Za-zＡ-Ｚａ-ｚ]?[-－]?[0-9０-９]{1,4}(?:号室?|[A-Za-zＡ-Ｚａ-ｚ])?')
+# 目印の語が無くても、部屋番号で終わる語は建物名とみなす（「コスモ高円寺101」）
+_ENDS_WITH_ROOM_NUMBER = re.compile(r'.*[^0-9０-９][0-9０-９]{1,4}(?:号室?)?')
+_YEAR_LIKE = re.compile(r'(?:19|20|１９|２０)[0-9０-９]{2}')
+# 番地に空白なしで続く文字（「3-5-8サンプルハイツ202」）。日本語の文は空白で
+# 区切られないため、「5-7-1、株式会社サンプルにて」の職歴まで続かないよう、
+# 年・月・西暦、読点・括弧、ひらがな（「の」「にて」等の助詞）、
+# 別のマスク済み部分（[PHONE_001] 等）の手前で止める。ひらがなの建物名は残る
+_ATTACHED_TO_BANCHI = re.compile(
+    r'(?:(?!(?:19|20)\d{2}|[年月～〜、。，．,（）()「」ぁ-ん])[^\s\[])*'
+)
+# 空白1つを挟んで続く語。空白2つ以上は PDF の表の列の区切りなので続きとみなさない
+_NEXT_WORD = re.compile(r'[ 　]([^\s\[]+)')
+
+
+def _end_of_building(text: str, pos: int) -> int:
+    """番地の終わり pos から、続く建物名・部屋番号の終わりまで進めた位置を返す"""
+    end = _ATTACHED_TO_BANCHI.match(text, pos).end()
+    # 番地に空白なしで続く会社名（「3-4-1株式会社サンプル」）は残す
+    corp = _NOT_BUILDING.search(text, pos, end)
+    if corp:
+        return corp.start()
+    for _ in range(2):  # 空白を挟んだ語は2つまで（「メゾンサンプル 405」）
+        next_word = _NEXT_WORD.match(text, end)
+        if not next_word:
+            break
+        word = next_word.group(1)
+        # 西暦を含む語（職歴の年）と、会社名・学校名に見える語は建物名とみなさない
+        if _YEAR_LIKE.search(word) or _NOT_BUILDING.search(word):
+            break
+        is_room = _ROOM_NUMBER.fullmatch(word) or _ENDS_WITH_ROOM_NUMBER.fullmatch(word)
+        if not (_BUILDING_WORD.search(word) or is_room):
+            break
+        end = next_word.end()
+    return end
+
 
 @dataclass
 class PiiMasker:
@@ -205,31 +275,42 @@ class PiiMasker:
     #  住所（番地以降）マスキング
     # ------------------------------------------------------------------ #
     def _mask_addresses(self, text: str) -> str:
-        """住所の番地以降をマスキングする
+        """住所の番地と、それに続く建物名・部屋番号をマスキングする
 
         都道府県・市区町村・町域名はそのまま。
-        数字+丁目/番地/号 の部分以降をマスキング。
+        まず 数字+丁目/番地/号 の書き方を拾い、最後にハイフンで書いた番地
+        （2-14-23 / 2丁目14-23）を都道府県・市区町村を目印に拾う。後者は実データ
+        444書類で最も多い書き方で、前者だけでは399行が素通りしていた（2026-09-21 測定）。
         """
         _NUM = r'[0-9０-９一二三四五六七八九十百]+'
         _NUM_OPT = rf'(?:{_NUM})?'  # 数字グループ（省略可）
 
-        address_patterns = [
-            # 丁目+番地+号: 1丁目2番3号 (以降の建物名等も含む)
-            rf'{_NUM}丁目{_NUM_OPT}{_DASH_CLASS}?{_NUM_OPT}番[地]?{_DASH_CLASS}?{_NUM_OPT}号?[^\n]*',
+        banchi_patterns = [
+            # 丁目+番地+号: 1丁目2番3号
+            rf'{_NUM}丁目{_NUM_OPT}{_DASH_CLASS}?{_NUM_OPT}番[地]?{_DASH_CLASS}?{_NUM_OPT}号?',
             # 番地+号: 123番地の4
-            rf'{_NUM}番地[のノ]?{_NUM_OPT}号?[^\n]*',
+            rf'{_NUM}番地[のノ]?{_NUM_OPT}号?',
             # 番+号（地なし）: 2番3号
-            rf'{_NUM}番{_NUM_OPT}号[^\n]*',
+            rf'{_NUM}番{_NUM_OPT}号',
         ]
 
         result = text
-        for pattern in address_patterns:
-            matches = list(re.finditer(pattern, result))
-            for match in reversed(matches):
-                addr_detail = match.group().rstrip()
-                if len(addr_detail) >= 3:
-                    placeholder = self._add_mapping("ADDR", addr_detail)
-                    result = result[:match.start()] + placeholder + result[match.end():]
+        for pattern in banchi_patterns:
+            spans = [(m.start(), m.end()) for m in re.finditer(pattern, result)]
+            result = self._mask_address_spans(result, spans)
+
+        spans = [(m.start(1), m.end(1)) for m in _ADDRESS_AFTER_CITY_PATTERN.finditer(result)]
+        return self._mask_address_spans(result, spans)
+
+    def _mask_address_spans(self, text: str, spans: list[tuple[int, int]]) -> str:
+        """番地の範囲を、続く建物名・部屋番号まで広げてマスキングする"""
+        result = text
+        # 後ろから置き換えると、前にある範囲の位置がずれない
+        for start, end in reversed(spans):
+            addr_detail = result[start:_end_of_building(result, end)].rstrip()
+            if len(addr_detail) >= 3:
+                placeholder = self._add_mapping("ADDR", addr_detail)
+                result = result[:start] + placeholder + result[start + len(addr_detail):]
         return result
 
     @property

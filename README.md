@@ -211,7 +211,7 @@ email:
 
 `email.enabled: true` の場合、スキャン結果に応じて以下のいずれかが送信されます（無音で終わらないため「失敗したのか」の誤認を防げます）。
 
-- **評価結果メール**: 新規応募者を1名以上評価できたとき（結果サマリ＋Excel添付）
+- **評価結果メール**: 新規応募者を1名以上評価できたとき（結果サマリ＋Excel添付）。評価できなかった応募者（AIが評価を断った・書類を読めなかった等）がいると、件名に「評価できず N名」、本文に名前・理由・HRMOSへのリンクが出る。この応募者は `status='error'` になり通常の scan では再評価されないため、HRMOSで直接評価する
 - **「新規なし」通知**: 新規応募者が0名で正常終了したとき。`notify_on_no_candidates: true`（デフォルト）のときのみ送信（`false` で抑止可）
 - **スキャン失敗アラート**: 認証失敗・応募者一覧の取得0件・対象はいたが評価成功0件・処理中の例外のとき（`email.enabled` のみで常時送信）
 
@@ -342,7 +342,7 @@ AGS_HRMOS_AUTO_EVAL/
 │   │   └── document.py     # PDF/Word/Excelテキスト抽出
 │   ├── evaluator/
 │   │   ├── llm_client.py        # LLMプロバイダー切替（Claude/Gemini API/Gemini CLI）
-│   │   ├── claude_client.py     # Claude CLI呼び出し（リトライ付き）
+│   │   ├── claude_client.py     # Claude CLI呼び出し（リトライ付き。プロジェクト外のフォルダで、会話保存なし・道具なしで起動）
 │   │   ├── gemini_api_client.py # Gemini REST API呼び出し（APIキー認証・推奨）
 │   │   ├── gemini_client.py     # Gemini CLI呼び出し（非推奨・個人アカウント提供終了）
 │   │   ├── pii_masker.py        # LLM送信前の個人情報マスキング（氏名・電話・住所・メール・郵便番号・生年月日の月日）
@@ -353,10 +353,12 @@ AGS_HRMOS_AUTO_EVAL/
 │   │   └── repository.py   # データアクセス層
 │   └── reporter/
 │       ├── export.py       # Excel評価レポート出力
-│       └── notify.py       # メール通知（Resend）
-├── tests/                  # 全56件。pytest は別途要インストール（requirements.txt に未収録）
+│       └── notify.py       # メール通知（Resend。評価できなかった応募者も表示）
+├── tests/                  # 全91件。pytest は別途要インストール（requirements.txt に未収録）
 │   ├── test_pii_masker.py  # PIIマスキングのユニットテスト
-│   └── test_first_pass.py  # 1次通過判定（○/△/×/判定不能）・応募日時パースのユニットテスト
+│   ├── test_first_pass.py  # 1次通過判定（○/△/×/判定不能）・応募日時パースのユニットテスト
+│   ├── test_claude_client.py # Claude CLI の起動引数・起動フォルダ
+│   └── test_notify.py      # 結果メールの「評価できなかった応募者」表示
 ├── improvement_list/       # 改修履歴（YYYY-MM-DD_{説明}.md）
 ├── docs/                   # 総括報告書・アーキテクチャ図
 └── data/                   # 実行時に自動生成
