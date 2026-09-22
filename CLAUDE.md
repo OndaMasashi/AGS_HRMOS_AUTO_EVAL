@@ -125,6 +125,7 @@ CLI (run.py: argparse)
 - ページ遷移: `page.goto()` を直接呼ばず `browser/page_utils.py` の `goto_with_retry()` を使う。`wait_until="networkidle"` の一発勝負は一時的な遅延で実行全体を落とすため、遷移は `domcontentloaded` で成立させ、`networkidle` は未到達でも続行する扱いにしている（遷移失敗のみ最大3回試行＝初回＋リトライ2回）。描画完了が必須の箇所は `ready_selector` で要素の出現を待つ
 - 改修履歴: `improvement_list/` に `YYYY-MM-DD_{説明}.md` 形式で記録。未対応タスクは `ROADMAP.md` の上部に残す
 - 認証情報: `config.yaml` に平文で書かない。`install.bat` は Windows のユーザー環境変数（`HRMOS_EMAIL` / `HRMOS_PASSWORD` / `GEMINI_API_KEY`）に保存する。フォルダごとコピーしても持ち出されないようにするため
+- **リポジトリは GitHub で公開**: 実在の応募者名・選考結果・HRMOS 画面のテキストを、コード・コメント・テスト・ドキュメント・コミットメッセージに書かない（例示は架空名）。`ROADMAP.md` とこのファイルも公開物なので、個人に関わる残タスクは `improvement_list/`（Git 管理外）に置く
 - スクリプトの文字コード: `.bat` は**純ASCII + CRLF**（cmd.exe は OEM コードページで読むため日本語は文字化けする）、`.ps1` は **UTF-8 BOM + CRLF**。日本語メッセージは必ず `.ps1` 側に置く
 - PowerShell は **Windows PowerShell 5.1** 前提（配布先に PS7 は無い）。`&&` / `??` / 三項演算子は使えない。`$ErrorActionPreference='Stop'` 下ではネイティブコマンドの stderr が致命的エラーになるため、外部コマンドは `Invoke-Native` で包む
 - 配布: `setup/build_dist.ps1` で作る。手作業で zip 化しない。ビルド時に「機密の中身スキャン・入れ子の複製検出・件数チェック・必須ファイルの入れ忘れ検知・HTMLへの `<head>` 付与」が走る
