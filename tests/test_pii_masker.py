@@ -310,18 +310,18 @@ class TestUnmasking:
 
 class TestRoundTrip:
     def test_full_pipeline(self):
-        resume = """氏名: 玉井 晴香
+        resume = """氏名: 佐藤 花子
 電話番号: 090-1234-5678
 住所: 東京都世田谷区成城1丁目2番3号
 
 職務経歴:
 2015年 - 2020年 株式会社テスト IT部門
 """
-        masker = PiiMasker(applicant_name="玉井 晴香")
+        masker = PiiMasker(applicant_name="佐藤 花子")
         masked = masker.mask(resume)
 
         # PIIがマスクされている
-        assert "玉井 晴香" not in masked
+        assert "佐藤 花子" not in masked
         assert "090-1234-5678" not in masked
         assert "1丁目2番3号" not in masked
 
@@ -331,7 +331,7 @@ class TestRoundTrip:
 
         # アンマスクで復元
         unmasked = masker.unmask(masked)
-        assert "玉井 晴香" in unmasked
+        assert "佐藤 花子" in unmasked
         assert "090-1234-5678" in unmasked
 
     def test_masked_count(self):

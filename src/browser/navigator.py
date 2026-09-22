@@ -401,10 +401,10 @@ def _extract_name_from_link_text(text: str) -> str:
 
     テキスト例（改行区切り）:
       行1: "書類選考 / 評価未入力"
-      行2: "玉井 晴香"           ← 名前
-      行3: "/ 成城大学"
+      行2: "山田 太郎"           ← 名前
+      行3: "/ 〇〇大学"
       行4: "（日時指定なし）"
-    → "玉井 晴香" を抽出
+    → "山田 太郎" を抽出
     """
     lines = [line.strip() for line in text.splitlines() if line.strip()]
 

@@ -20,7 +20,7 @@ class LoginSelectors:
 class ApplicantListSelectors:
     """応募者一覧ページ"""
     # 各応募者はリンク要素。テキストにステータス・名前・大学名等を含む
-    # 例: " 書類選考 / 評価未入力 玉井 晴香 / 成城大学 ..."
+    # 例: " 書類選考 / 評価未入力 山田 太郎 / 〇〇大学 ..."
     APPLICANT_LINK_ROLE = "link"
 
     # 一覧が実際に描画されたかの判定に使う CSS セレクタ。
