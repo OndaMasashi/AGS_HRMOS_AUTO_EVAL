@@ -73,7 +73,7 @@ Anthropic 利用ポリシーは resume screening を高リスク用途に指定�
 ### 高: 年齢・性別の扱い（AI が評価を拒否した理由の1つ）
 
 2026-09-16/17 に Claude が評価を拒否した理由のうち、ツールでは直していないもの。出力スキーマの
-`applicant_gender` / `applicant_age`、年齢帯ごとの閾値、面接質問の「35歳以上であれば」分岐。
+`applicant_gender` / `applicant_age`、年齢帯ごとの閾値（面接質問の「35歳以上であれば」分岐は 2026-10-15 の観点変更で削除済み）。
 労働施策総合推進法9条（募集・採用時の年齢制限の原則禁止）と男女雇用機会均等法を名指ししていた。
 **ツールの修正ではなく運用判断**（社労士確認を推奨）。住所マスクと評価AIの隔離は対応済み
 （[2026-09-21 AI評価の拒否への対策](improvement_list/2026-09-21_llm_refusal_countermeasures.md)）。
@@ -108,6 +108,14 @@ CLAUDE.md の規約（認証情報は環境変数 `HRMOS_PASSWORD` / `RESEND_API
 コピーでは持ち出される。環境変数へ移して `config.yaml` から消すこと。
 
 
+### 中: Claude API の直接呼び出しへの切り替え（検討中）
+
+`claude -p`（プランの使用量を消費）をやめ、`anthropic` SDK で Claude API を呼ぶ provider を足す案（2026-10-15 相談）。
+Max/Team プラン付属の月次クレジットは Claude Console の API 専用で、Google Cloud（Vertex AI）上の Claude では使えない。
+切り替え時は CLI 経由で付いていたシステムプロンプトが外れるため、過去の応募者を再評価して点差と○率を確かめてから本番に入れる。
+クラウド実行（Google Cloud）は別の判断で、会社の請求先アカウント・応募者書類をクラウドに置く承認・クラウドから HRMOS へのログイン可否が前提。
+
+
 ### 中: 既存の定期実行タスクは再登録が必要
 
 `run_scan.bat` に無人モード（引数 `scheduled`）を追加したため、**それ以前に登録したタスクには
@@ -122,6 +130,13 @@ CLAUDE.md の規約（認証情報は環境変数 `HRMOS_PASSWORD` / `RESEND_API
 タスクスケジューラの `HRMOS_AutoEval_1230` / `_1730` に `WakeToRun=True` を設定したが、OS のスリープ解除タイマーが AC/DC とも無効（`powercfg /query SCHEME_CURRENT SUB_SLEEP RTCWAKE` → `0x00000000`）のため実際には PC を起こせない。有効化するとシステム全体で他タスクも PC を起こせるようになるため、電源設定を変えるかは要判断。`StartWhenAvailable=True` により復帰後の実行は担保済み。
 
 根拠: [2026-07-29 ページ遷移のリトライ導入とスケジューラ設定の修正](improvement_list/2026-07-29_fix_navigation_timeout_and_scheduler.md)
+
+
+### 低: 新しい面接質問（4観点・STAR形式）を配布先へ届け、出力を見届ける
+
+2026-10-15 に面接質問を4問へ変更した。配布 zip の作り直しと、配布済みPCの `config.yaml` の書き換えが未実施。
+実書類での試行は26歳の1件のみで、「3文以内」の指示は4問中3問で守られなかった。40代以上・リーダー経験者での出力を
+次回スキャンの Excel で確認し、長ければ字数で指示する。根拠: [改修履歴](improvement_list/2026-10-15_interview_questions_star.md)
 
 
 ### 低: 自動NG登録に失敗した応募者を拾い直す経路がない
@@ -210,13 +225,17 @@ sonnet +0.214 / opus +0.143 と、opus のほうが過去の評価との連続�
 
 ### 低: Windows 予約名へのリダイレクトに注意
 
-2026-09-09 に `nul` / `dist` / `cworkAGS_HRMOS_AUTO_EVALtests` を削除済み。
+2026-09-09 に `nul` / `dist` / `cworkAGS_HRMOS_AUTO_EVALtests` を削除済み（最後の1つは空フォルダで残っていたため 2026-10-15 に再削除。
+名前の2文字目が Git Bash が `:` を置き換えた私用文字 U+F03A で、見たままのパスでは「存在しない」と出る。
+`Get-ChildItem -Filter "*workAGS*"` で実名を取り、`Remove-Item -LiteralPath` で消す）。
 `nul` の中身は `ls` のエラー出力で、**Git Bash で `2> nul` と書いたことが原因**だった
 （cmd.exe では捨てられるが、Git Bash では `nul` という名前のファイルが作られる）。
 Git Bash では `2>/dev/null` を使うこと。削除は PowerShell から
 `[System.IO.File]::Delete('\\?\<絶対パス>\nul')` で行う（通常の `Remove-Item` では消せない）。
 
 ## 完了タスク
+
+- [2026-10-15 面接質問を4観点・STAR形式に変更](improvement_list/2026-10-15_interview_questions_star.md)
 
 - [2026-09-22 旧配布zipを管理対象から外し、例示の氏名を架空名に統一](improvement_list/2026-09-22_remove_old_zip_and_example_names.md)
 
