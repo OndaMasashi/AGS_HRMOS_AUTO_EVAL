@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-HRMOS採用ページから応募者書類（PDF/Word/Excel）を自動取得し、Gemini API または Claude CLI でAI評価・スコアリングを行い、Excelレポートを出力するCLI自動化ツール。Windows 10/11 + Python 3.10+ 環境で動作する。社内の同僚PCへ zip で配布して使う。
+HRMOS採用ページから応募者書類（PDF/Word/Excel）を自動取得し、Gemini API・Claude CLI・Claude API のいずれかでAI評価・スコアリングを行い、Excelレポートを出力するCLI自動化ツール。Windows 10/11 + Python 3.10+ 環境で動作する。社内の同僚PCへ zip で配布して使う。
 
 ## Commands
 
@@ -50,7 +50,7 @@ powershell -ExecutionPolicy Bypass -File setup\build_dist.ps1
 
 AI を呼び出すのは `scan` と `doctor`（`--skip-llm` なし）のみ。`report` / `status` / `doctor --skip-llm` は課金が発生しない。
 
-テストは `tests/` に4ファイル: `test_pii_masker.py`（PII マスキング）、`test_first_pass.py`（1次通過判定の4値と応募日時のパース）、`test_claude_client.py`（Claude CLI の起動引数と起動フォルダ）、`test_notify.py`（結果メールの「評価できなかった応募者」）。**pytest は `requirements.txt` に含まれない**（配布先には不要なため）。開発機の `.venv` には 2026-09-09 に導入済みで `.venv\Scripts\python.exe -m pytest tests/ -q` で91件が走る。新しい環境では `pip install pytest` が要る。`test_first_pass.py` は pytest 固有の機能（fixture / parametrize）を使っていないので、クラスを直接インスタンス化してメソッドを呼ぶだけでも検証できる。
+テストは `tests/` に5ファイル: `test_pii_masker.py`（PII マスキング）、`test_first_pass.py`（1次通過判定の4値と応募日時のパース）、`test_claude_client.py`（Claude CLI の起動引数と起動フォルダ）、`test_claude_api_client.py`（Claude API の終わり方の判定・再試行・キーの検査と伏せ字・provider の設定検証。SDK は偽物に差し替え）、`test_notify.py`（結果メールの「評価できなかった応募者」）。**pytest は `requirements.txt` に含まれない**（配布先には不要なため）。開発機の `.venv` には 2026-09-09 に導入済みで `.venv\Scripts\python.exe -m pytest tests/ -q` で110件が走る。新しい環境では `pip install pytest` が要る。`test_first_pass.py` は pytest 固有の機能（fixture / parametrize）を使っていないので、クラスを直接インスタンス化してメソッドを呼ぶだけでも検証できる。
 
 ## Architecture
 
@@ -71,12 +71,13 @@ CLI (run.py: argparse)
 
 ### LLM呼び出しの仕組み
 
-`config.yaml` の `evaluation.provider` で3方式を切り替える。既定は `gemini_api`。
+`config.yaml` の `evaluation.provider` で4方式を切り替える。既定は `gemini_api`。`validate_config` が許容値以外を起動時に止める（以前は書き間違いが黙って Claude CLI に回っていた）。
 
 | provider | 実装 | 認証 | 備考 |
 |---|---|---|---|
 | `gemini_api` | `gemini_api_client.py` | 環境変数 `GEMINI_API_KEY` | REST API を urllib で直接呼ぶ。CLI・Node.js 不要で無人実行に強い。**既定** |
 | `claude` | `claude_client.py` | Claude CLI の対話ログイン | `subprocess.run(["claude","-p","--model",…,"--no-session-persistence","--tools",""], cwd=%TEMP%\hrmos_auto_eval_llm)`。npm 版は `claude.cmd` になり CreateProcess が解決できないため **ネイティブ版（`claude.exe`）が必要** |
+| `claude_api` | `claude_api_client.py` | キーファイル `%LOCALAPPDATA%\hrmos-auto-eval\anthropic-api-key` | 公式SDK `anthropic` で Messages API を直接呼ぶ。**開発者の PC 専用**（配布インストーラは選ばせない）。Max / Team プラン付属の月次クレジットから払うために 2026-11-01 に追加（`claude -p` はクレジットの対象外）。model は `claude-opus-5-5` のような正式名が必須 |
 | `gemini` | `gemini_client.py` | Gemini CLI | **非推奨**。個人アカウント向け提供は 2026-06-18 に終了 |
 
 - PII マスキング (`pii_masker.py`): LLM送信前に氏名・電話・住所・メールアドレス・郵便番号・生年月日の月日をマスクし、応答後にアンマスク。氏名は**フルネームだけでなく姓・名の単独出現も**対象にする（フルネームだけ消しても実データ20人中6人で姓か名が素通りしていた）。**職歴・所属企業名・資格・生年月日の「年」はマスクしない**（評価と年齢判定に必要なため）。姓・名の単独マスクは企業名・学校名を示す語（`_CORP_HINT`）が近くにある箇所を除外し、1文字の姓・名は一般的な語と衝突するため対象外。マスクの順序にも依存があり、`090-1111-2222` の前半は郵便番号と同じ形なので**電話番号を郵便番号より先に**処理する。住所は番地以降だけを消し、都道府県・市区町村・町名は残す。**番地をハイフンで書く形（`2-14-23` / `2丁目14-23`）が実データで最も多い**ため、都道府県＋市区町村を目印に拾っている（それまでは「番」「番地」を含む書き方しか拾えず、444書類で399行が素通りしていた）。PDF からの取り出しでハイフンが長音符（ー）に化けることがあるので、住所に限ってそれもハイフン扱いにする。**番地のあとは建物名・部屋番号までで止め、行末までは消さない**（PDF では住所と職歴・学歴が同じ行に並ぶことがあり、行末まで消すと職歴が AI から見えなくなる。点数が下がれば取り消せない自動NG登録につながる）。止める位置は `_end_of_building()` が決める。番地とみなさないもの（西暦・和暦・「丁目」が続かない漢数字・直後に「年」「名」「期」などの単位が続く数の範囲）と、建物名とみなさない語（会社名・学校名・事業所の手がかり）はテストで固定してある。**住所パターンを変えたら、実データでの残り件数と職歴の巻き込みを測り直すこと**（2回のレビューでどちらも職歴を消す不具合が見つかった）
@@ -85,6 +86,15 @@ CLI (run.py: argparse)
 - Claude CLI 呼び出し時は環境変数 `CLAUDECODE` を除去（ネストセッション防止）
 - **Claude CLI はプロジェクトの外（`%TEMP%\hrmos_auto_eval_llm`）で起動する**。CLI は起動フォルダから親をさかのぼって CLAUDE.md を読むため、プロジェクト配下で起動するとこのファイル（自動NG登録や年齢の閾値の説明）が評価の文脈に混ざる。2026-09-16/17 にはそれを理由に評価を拒否され、2名が未評価のまま放置された。あわせて `--no-session-persistence`（書類本文を含む会話を `~/.claude/projects/` に残さない）と `--tools ""`（書類に書かれた指示でファイルを読ませない）を付けている。`--tools` は値を複数取るので**必ず最後の引数にする**。**`--safe-mode` は付けない**（実機で併用すると、道具を使ったかのような架空の結果を AI が作文した）。`~/.claude/CLAUDE.md` が外れているかは未確定（AI は「無い」と答えたが自己申告。確実に外せる `--bare` は APIキー認証が必須で使えない）
 - 会話を保存しないため、AI の応答を評価結果として読めなかったときは**応答の全文を `data/logs/` に出す**（`ParseError` のメッセージは先頭300字で切れる）。評価できなかった応募者は結果メールに名前・理由・HRMOSへのリンクつきで載る（`status='error'` は通常の scan で再試行されないため）
+- **`claude_api` の呼び方には理由があり、崩さないこと**（前例は suno-accompanist の同じ切り替え）:
+  - **キーはファイルで渡し、ユーザー環境変数 `ANTHROPIC_API_KEY` に置かない**（「認証情報は環境変数」の規約の例外）。Claude Code は非対話モードでその変数があれば常に使うため、PC 上のすべての `claude -p` が API 課金に切り替わる。キーはユーザーが `scripts\set-anthropic-key.ps1` で書く。**Claude Code はキーを開かない**（`.claude/settings.json` で、Read/Edit/Write と、ファイル名 `anthropic-api-key` を含む Bash/PowerShell のコマンドを拒否している。言い回しを変えたコマンドまでは止められないので、拒否の設定に頼らず開かないこと）
+  - **effort は定数 `medium`**（`claude_api_client.EFFORT`。2026-11-01 のユーザーの選択）。同じ56名を `high` と比べた差は合計点で平均 −0.09点（同じ設定で採り直したときの揺れと同程度）で、○の基準はそのまま使える。CLI 時代はグローバル設定 `modelSettings.claude-opus-5-5.effortLevel` の `xhigh` で動いていた。Opus 5.5 の既定も `medium` だが、既定が変わっても黙って深さが変わらないよう明示している。変えたら過去の応募者を再評価して点差を見る
+  - **送り先 `https://api.anthropic.com` を固定**（省くと SDK が環境変数 `ANTHROPIC_BASE_URL` を使う）。**SDK の自動リトライは切り**（`max_retries=0`）、再試行は config の `max_retries` / `retry_delay` のループに一本化
+  - **本文より先に `stop_reason` を見る**。`end_turn` / `stop_sequence` 以外（拒否・上限での途中切れ）は失敗。**断られても別のモデルでやり直さない**（API の `fallbacks` を付けない）。採点するモデルが黙って変わると、取り消せない自動NG登録に別モデルの点数が混ざる
+  - 400（残高不足を含む）・401・403・404 は再試行しない。429・408・5xx・通信エラー・タイムアウトだけ再試行する。エラー文は投げる前に `sk-ant-***` へ伏せる（ログとメールに出るため）
+  - クレジットを使い切ると API が止まり、その回の応募者は `status='error'` になる（自動で CLI に切り戻さない）。`scan --all` は1回で月のクレジットを超えうる
+  - SDK は `_create_client` の中で遅延 import する（依存を入れ直していない配布先で、Gemini の利用者まで import エラーで落とさないため）
+  - API は CLAUDE.md を読まないので、CLI で必要だった回避策（`%TEMP%` 起動・`--tools ""`・`CLAUDECODE` 除去）は不要
 - LLM を呼ぶ箇所はコード全体で `main.py`（評価）と `doctor.py`（疎通確認）の2箇所のみ
 
 ### 設定の検証
@@ -106,10 +116,10 @@ CLI (run.py: argparse)
 `config.yaml`（`.gitignore` 対象、テンプレートは `config.yaml.example`）:
 - `credentials`: HRMOS ログイン情報（環境変数 `HRMOS_EMAIL` / `HRMOS_PASSWORD` で上書き可）
 - `evaluation_criteria`: 評価基準リスト（name + description）。項目数・内容は自由に変更可
-- `evaluation.provider`: `"gemini_api"`（既定）/ `"claude"` / `"gemini"`（非推奨）
-- `evaluation.model`: 評価に使うモデル。`gemini_api` では API のモデル名（既定 `gemini-3.5-flash-lite`。同単価の `gemini-2.5-flash` より実測で約5倍速く、既存評価との一致度も高い）、`claude` では CLI の `--model` に渡すエイリアス（`sonnet` / `opus`）。**必ず明示する**。未設定だと `claude_client.DEFAULT_MODEL`（`sonnet`）にフォールバックする。モデル無指定で `claude -p` を呼ぶと CLI の既定モデル＝開発者が Claude Code で選んでいるモデルが使われ、そちらを切り替えた瞬間に応募者の採点基準が変わる（2026-09-09 に実際に発生し、既定モデルが CLI の対応外バージョンになって全件 API Error 400 で失敗した）
+- `evaluation.provider`: `"gemini_api"`（既定）/ `"claude"` / `"claude_api"`（開発者向け）/ `"gemini"`（非推奨）
+- `evaluation.model`: 評価に使うモデル。`gemini_api` では API のモデル名（既定 `gemini-3.5-flash-lite`。同単価の `gemini-2.5-flash` より実測で約5倍速く、既存評価との一致度も高い）、`claude` では CLI の `--model` に渡すエイリアス（`sonnet` / `opus`）、`claude_api` では正式名（`claude-opus-5-5`。略称は API で 404 になるため `validate_config` が弾く）。**必ず明示する**。未設定だと `claude_client.DEFAULT_MODEL`（`sonnet`）にフォールバックする。モデル無指定で `claude -p` を呼ぶと CLI の既定モデル＝開発者が Claude Code で選んでいるモデルが使われ、そちらを切り替えた瞬間に応募者の採点基準が変わる（2026-09-09 に実際に発生し、既定モデルが CLI の対応外バージョンになって全件 API Error 400 で失敗した）
 - `evaluation.gemini_api_key`: 環境変数 `GEMINI_API_KEY` での指定を推奨
-- `first_pass_criteria`: 年齢帯×平均点閾値による1次通過判定。**平均点は評価項目数で割った値なので、取りうる値は飛び飛びになる**（7項目なら 0.143 刻み）。そのため間に取りうる値がない2つの閾値は同じ判定になる（旧設定の `3.9` と `4.0` は実質どちらも「4.00以上」で、別基準にしているつもりが同一基準で動いていた）。閾値を変えるときは実際の点数分布に当てて通過率を確認し、`config.yaml` に「実質 N.NN以上」をコメントで残すこと。**基準を上げると △ が × に落ちて `hrmos_evaluation` の自動NG登録の対象が増える**（HRMOS への登録は取り消せない）
+- `first_pass_criteria`: 年齢帯×平均点閾値による1次通過判定。**平均点は評価項目数で割った値を小数第1位に四捨五入してから比べる**（`main.py` / `export.py` / `notify.py` の `round(…, 1)`）。7項目なら丸めた平均点は 2.0 / 2.1 / 2.3 / 2.4 / 2.6 / 2.7 / 2.9 / 3.0 … しか出ないので、間に出る値がない2つの閾値は同じ判定になる（例: `2.8` と `2.9`）。**以前の「`3.9` と `4.0` は同じ判定」「実質 N.NN以上」という説明は四捨五入を考えておらず誤りだった**（2026-11-01 判明。例: `2.6` は「実質 2.71以上」と書いていたが、実際は合計18点＝平均 2.57 で○）。閾値を変えるときは実際の点数分布に当てて通過率を確認し、`config.yaml` に「合計 N 点以上」をコメントで残すこと（四捨五入込みで `classify_first_pass(round(t/7, 1), …)` を回して確かめる）。**自動NG登録の対象は ○ 以外（△ と ×）なので、基準を上げると ○ が △ に落ちて対象が増える**（HRMOS への登録は取り消せない）。**採点モデルを変えたら閾値も合わせ直す**: 2026-11-01 に Opus 5 → 5.5 で合計点が平均約1.7点下がり、一律2段階下げた（同じ56名を両モデルで採点。経緯は `improvement_list/2026-11-01_claude_api_evaluation.md`）
 - `interview_questions`: `count`（問数＝Excel の質問候補の列数）と `perspective`（観点）。2026-10-15 から成長意欲・メタ認知・QCD・人柄の4観点を STAR 形式で1問ずつ、この順に【見出し】付きで出す。**観点の数と `count` を揃えること**。観点は採点と同じ1回の AI 呼び出しのプロンプトに入るため、書き換えると採点にも影響しうる。`config.yaml` は Git 管理外なので、変えたら旧文面ごと `improvement_list/` に残す
 - `email.attach_resumes`: `true`（デフォルト）で1次通過候補(○)の経歴書をメール添付。経歴書はマスクなしPIIを含むため運用注意
 - `email.notify_on_no_candidates`: `true`（デフォルト）で新規応募者0件の正常終了時も「新規なし」通知を送る（無音による誤認防止）。失敗アラート（認証失敗・一覧0件・評価成功0件・例外）は `email.enabled` のみで常時送信
@@ -124,7 +134,8 @@ CLI (run.py: argparse)
 - HRMOS への書き込みは `browser/evaluation_form.py` だけに閉じる。`navigator.py` は読み取り専用のまま保つ（誤って評価を登録し得る経路を1箇所に限定するため）。書き込み系では「判断に迷ったら登録しない」側に倒し、要素が1つに絞れないときは操作せず失敗させる
 - ページ遷移: `page.goto()` を直接呼ばず `browser/page_utils.py` の `goto_with_retry()` を使う。`wait_until="networkidle"` の一発勝負は一時的な遅延で実行全体を落とすため、遷移は `domcontentloaded` で成立させ、`networkidle` は未到達でも続行する扱いにしている（遷移失敗のみ最大3回試行＝初回＋リトライ2回）。描画完了が必須の箇所は `ready_selector` で要素の出現を待つ
 - 改修履歴: `improvement_list/` に `YYYY-MM-DD_{説明}.md` 形式で記録。未対応タスクは `ROADMAP.md` の上部に残す
-- 認証情報: `config.yaml` に平文で書かない。`install.bat` は Windows のユーザー環境変数（`HRMOS_EMAIL` / `HRMOS_PASSWORD` / `GEMINI_API_KEY`）に保存する。フォルダごとコピーしても持ち出されないようにするため
+- 認証情報: `config.yaml` に平文で書かない。`install.bat` は Windows のユーザー環境変数（`HRMOS_EMAIL` / `HRMOS_PASSWORD` / `GEMINI_API_KEY`）に保存する。フォルダごとコピーしても持ち出されないようにするため。**例外は Claude API のキー**で、環境変数ではなく `%LOCALAPPDATA%\hrmos-auto-eval\anthropic-api-key` に置く（理由は上の `claude_api` の節）
+- `scripts/` は開発者専用（Claude API のキー保存など）。`setup/build_dist.ps1` が配布 zip から除外する
 - **リポジトリは GitHub で公開**: 実在の応募者名・選考結果・HRMOS 画面のテキストを、コード・コメント・テスト・ドキュメント・コミットメッセージに書かない（例示は架空名）。`ROADMAP.md` とこのファイルも公開物なので、個人に関わる残タスクは `improvement_list/`（Git 管理外）に置く
 - スクリプトの文字コード: `.bat` は**純ASCII + CRLF**（cmd.exe は OEM コードページで読むため日本語は文字化けする）、`.ps1` は **UTF-8 BOM + CRLF**。日本語メッセージは必ず `.ps1` 側に置く
 - PowerShell は **Windows PowerShell 5.1** 前提（配布先に PS7 は無い）。`&&` / `??` / 三項演算子は使えない。`$ErrorActionPreference='Stop'` 下ではネイティブコマンドの stderr が致命的エラーになるため、外部コマンドは `Invoke-Native` で包む

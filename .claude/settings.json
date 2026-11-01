@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/anthropic-api-key)",
+      "Read(**/hrmos-auto-eval/**)",
+      "Read(~/AppData/Local/hrmos-auto-eval/**)",
+      "Edit(**/anthropic-api-key)",
+      "Write(**/anthropic-api-key)",
+      "Bash(*anthropic-api-key*)",
+      "PowerShell(*anthropic-api-key*)"
+    ]
+  }
+}

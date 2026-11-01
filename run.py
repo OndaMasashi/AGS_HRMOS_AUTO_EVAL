@@ -18,6 +18,10 @@ def setup_logging(verbose: bool = False):
     if verbose:
         for noisy_logger in ["pdfminer", "pdfplumber", "PIL", "urllib3", "asyncio"]:
             logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+    # Claude API の SDK と通信ライブラリは常に抑える。DEBUG では送信内容（＝応募者の書類本文）を
+    # そのままログに書き、INFO でも1リクエストごとに「HTTP Request: POST ...」を出すため
+    for sdk_logger in ["anthropic", "httpx2", "httpx", "httpcore"]:
+        logging.getLogger(sdk_logger).setLevel(logging.WARNING)
 
 
 def main():

@@ -5,6 +5,10 @@ from pathlib import Path
 
 import yaml
 
+# llm_client.call_llm が受け付ける provider。書き間違えると従来は黙って Claude CLI に
+# 回っていたため、起動時に止める
+VALID_PROVIDERS = ("gemini_api", "claude", "claude_api", "gemini")
+
 
 def normalize_config(config: dict) -> dict:
     """見出しだけ書かれて中身が空のセクションを空辞書に整える
@@ -52,7 +56,37 @@ def validate_config(config: dict) -> list[str]:
                     f"evaluation_criteria の {i} 番目に name と description の両方が必要です。"
                 )
 
+    errors.extend(_validate_evaluation(config))
     errors.extend(_validate_hrmos_evaluation(config))
+
+    return errors
+
+
+def _validate_evaluation(config: dict) -> list[str]:
+    """AI評価の設定（provider とモデル名）を検証する"""
+    evaluation = config.get("evaluation")
+    if evaluation is None:
+        return []
+    if not isinstance(evaluation, dict):
+        return ["evaluation: の書き方が正しくありません（provider: / model: を字下げして並べてください）。"]
+
+    errors = []
+    provider = evaluation.get("provider", "claude")
+    if provider not in VALID_PROVIDERS:
+        errors.append(
+            f"evaluation.provider は {' / '.join(VALID_PROVIDERS)} のいずれかで書いてください"
+            f"（書かれていた値: {provider}）。"
+        )
+
+    if provider == "claude_api":
+        # API は CLI の略称（opus / sonnet）を受け付けず 404 になる。評価の途中で
+        # 全件失敗するより、起動時に止める
+        model = evaluation.get("model")
+        if not isinstance(model, str) or not model.startswith("claude-"):
+            errors.append(
+                'evaluation.provider が "claude_api" のときは、evaluation.model にモデルの正式名'
+                '（例: "claude-opus-5-5"）を書いてください。"opus" のような略称は API では使えません。'
+            )
 
     return errors
 

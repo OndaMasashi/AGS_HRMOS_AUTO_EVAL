@@ -2,6 +2,7 @@
 
 import logging
 
+from src.evaluator.claude_api_client import call_claude_api, ClaudeApiClientError
 from src.evaluator.claude_client import call_claude, ClaudeClientError
 from src.evaluator.gemini_api_client import call_gemini_api, GeminiApiClientError
 from src.evaluator.gemini_client import call_gemini, GeminiClientError
@@ -23,6 +24,9 @@ def call_llm(prompt: str, config: dict) -> str:
         if provider == "gemini_api":
             logger.debug("LLMプロバイダー: Gemini API（APIキー認証）")
             return call_gemini_api(prompt, config)
+        if provider == "claude_api":
+            logger.debug("LLMプロバイダー: Claude API（APIキー認証）")
+            return call_claude_api(prompt, config)
         if provider == "gemini":
             # Gemini CLI は 2026-06-18 に個人アカウント向け提供を終了している
             logger.warning(
@@ -32,5 +36,5 @@ def call_llm(prompt: str, config: dict) -> str:
             return call_gemini(prompt, config)
         logger.debug("LLMプロバイダー: Claude CLI")
         return call_claude(prompt, config)
-    except (ClaudeClientError, GeminiClientError, GeminiApiClientError) as e:
+    except (ClaudeClientError, ClaudeApiClientError, GeminiClientError, GeminiApiClientError) as e:
         raise LLMClientError(str(e)) from e

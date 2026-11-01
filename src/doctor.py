@@ -165,7 +165,10 @@ def _check_llm(config: dict | None) -> tuple[str, str, str]:
     if config is None:
         return NG, "AI評価の疎通", "設定ファイルが読めないため判定できません。"
 
-    provider = config.get("evaluation", {}).get("provider", "claude")
+    evaluation = config.get("evaluation")
+    if not isinstance(evaluation, dict):
+        return NG, "AI評価の疎通", "evaluation: の書き方が正しくないため確認できません。"
+    provider = evaluation.get("provider", "claude")
 
     # 疎通確認は短いプロンプト・短いタイムアウトで行う
     probe_config = {
@@ -191,6 +194,11 @@ def _check_llm(config: dict | None) -> tuple[str, str, str]:
             hint = " claude を一度手で起動してブラウザ認証を完了してください。"
         elif provider == "gemini_api":
             hint = " 環境変数 GEMINI_API_KEY と、キーの課金設定を確認してください。"
+        elif provider == "claude_api":
+            hint = (
+                " キーの置き場（上の「Claude APIキー」の行）と、Claude Console の"
+                " Settings > Billing のクレジット残高を確認してください。"
+            )
         return NG, f"AI評価の疎通 ({provider})", f"{first_line}{hint}"
 
     if not response.strip():
@@ -201,6 +209,27 @@ def _check_llm(config: dict | None) -> tuple[str, str, str]:
         # 無料枠かどうかはAPIから判別できないため、毎回目に入る形で注意を出す
         detail += " ※APIキーの課金が有効か確認してください（無料枠は入力内容が学習に使われます）"
     return OK, f"AI評価の疎通 ({provider})", detail
+
+
+def _check_claude_api_key() -> tuple[str, str, str]:
+    """Claude API の SDK が入り、キーが置かれ形が正しいかを見る（AI は呼ばない。値は表示しない）"""
+    import importlib.util
+
+    from src.evaluator.claude_api_client import ClaudeApiClientError, api_key_path, read_api_key
+
+    # SDK は遅延 import なので _check_packages では見ていない（Gemini の利用者には不要なため）。
+    # ここで見ないと --skip-llm の診断が OK なのに scan で全員失敗する
+    if importlib.util.find_spec("anthropic") is None:
+        return NG, "Claude APIキー", (
+            "Python パッケージ anthropic が入っていません。"
+            ".venv\\Scripts\\python.exe -m pip install -r requirements.txt を実行してください。"
+        )
+    try:
+        read_api_key()
+    except ClaudeApiClientError as e:
+        # 案内は複数行（保存スクリプトの実行方法を含む）なので1行につなげて出す
+        return NG, "Claude APIキー", " ".join(line.strip() for line in str(e).splitlines())
+    return OK, "Claude APIキー", f"{api_key_path()} に保存済み（値は表示しません）"
 
 
 def _check_data_dirs() -> tuple[str, str, str]:
@@ -348,6 +377,11 @@ def run_doctor(config_path: str = "config.yaml", skip_llm: bool = False) -> int:
     results.append(_check_data_dirs())
     results.append(_check_email(config))
     results.append(_check_hrmos_evaluation(config))
+    # evaluation: の書き方が誤っている（辞書でない）場合は _check_config が NG を出すので、
+    # ここでは落ちずに飛ばす
+    evaluation = (config or {}).get("evaluation")
+    if isinstance(evaluation, dict) and evaluation.get("provider") == "claude_api":
+        results.append(_check_claude_api_key())
 
     if skip_llm:
         results.append((WARN, "AI評価の疎通", "--skip-llm 指定のためスキップしました"))

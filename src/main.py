@@ -50,6 +50,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 # ログ表示用のプロバイダー名（config の provider 値 → 人が読む名前）
 PROVIDER_LABELS = {
     "claude": "Claude CLI",
+    "claude_api": "Claude API",
     "gemini_api": "Gemini API",
     "gemini": "Gemini CLI",
 }

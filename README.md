@@ -15,7 +15,7 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 ## 主な機能
 
 - 応募者書類の自動ダウンロード（PDF/Word/Excel対応）
-- Gemini API / Claude CLI によるAI自動評価（設定した評価基準に基づく1〜5点のスコアリング、configで切替可能。使うモデルは `evaluation.model` で固定する）
+- Gemini API / Claude CLI / Claude API によるAI自動評価（設定した評価基準に基づく1〜5点のスコアリング、configで切替可能。使うモデルは `evaluation.model` で固定する）
 - LLM送信前の個人情報マスキング（氏名・電話・住所・メールアドレス・郵便番号・生年月日の月日。職歴・企業名・資格は評価に必要なため残す）
 - 面接質問候補の自動生成（応募者ごとに4問。成長意欲・メタ認知・QCD・人柄の観点を STAR 形式で問う）
 - Excel一覧表の自動出力（レーダーチャート・1次通過候補・備考欄付き）
@@ -30,6 +30,7 @@ HRMOS採用ページをクローリングし、応募者一覧から履歴書等
 - **AI**: 以下のいずれか
   - **Gemini API キー**（推奨 / `provider: "gemini_api"`）: CLI・Node.js・ブラウザログインが不要。[Google AI Studio](https://aistudio.google.com/apikey) でキーを発行する
   - **Claude Code**（`provider: "claude"`）: Pro / Max / Team / Enterprise / Console のいずれかの契約と、初回のブラウザ認証が必要
+  - **Claude API**（`provider: "claude_api"`・開発者向け）: Claude Console の API キーとクレジット（Max / Team プラン付属の月次クレジットを含む）が必要。キーは `scripts\set-anthropic-key.ps1` で保存する（後述）
 
 > **注意**: Gemini CLI（`provider: "gemini"`）は 2026-06-18 に個人アカウント向けの提供が終了したため、通常は動作しません。Gemini を使う場合は APIキー認証の `gemini_api` を選んでください。
 >
@@ -114,7 +115,7 @@ copy config.yaml.example config.yaml
 .venv\Scripts\python.exe run.py doctor
 ```
 
-`config.yaml` を開いて `evaluation.provider`（`gemini_api` / `claude`）と `evaluation_criteria` を設定し、認証情報は上記の環境変数で指定します。
+`config.yaml` を開いて `evaluation.provider`（`gemini_api` / `claude` / `claude_api`）と `evaluation_criteria` を設定し、認証情報は上記の環境変数で指定します。
 
 ## 配布パッケージの作成（配る側）
 
@@ -341,8 +342,9 @@ AGS_HRMOS_AUTO_EVAL/
 │   ├── parser/
 │   │   └── document.py     # PDF/Word/Excelテキスト抽出
 │   ├── evaluator/
-│   │   ├── llm_client.py        # LLMプロバイダー切替（Claude/Gemini API/Gemini CLI）
+│   │   ├── llm_client.py        # LLMプロバイダー切替（Claude CLI/Claude API/Gemini API/Gemini CLI）
 │   │   ├── claude_client.py     # Claude CLI呼び出し（リトライ付き。プロジェクト外のフォルダで、会話保存なし・道具なしで起動）
+│   │   ├── claude_api_client.py # Claude API呼び出し（公式SDK。キーはファイルから読む・effort固定・拒否は失敗扱い）
 │   │   ├── gemini_api_client.py # Gemini REST API呼び出し（APIキー認証・推奨）
 │   │   ├── gemini_client.py     # Gemini CLI呼び出し（非推奨・個人アカウント提供終了）
 │   │   ├── pii_masker.py        # LLM送信前の個人情報マスキング（氏名・電話・住所・メール・郵便番号・生年月日の月日）
@@ -354,11 +356,14 @@ AGS_HRMOS_AUTO_EVAL/
 │   └── reporter/
 │       ├── export.py       # Excel評価レポート出力
 │       └── notify.py       # メール通知（Resend。評価できなかった応募者も表示）
-├── tests/                  # 全91件。pytest は別途要インストール（requirements.txt に未収録）
+├── tests/                  # 全110件。pytest は別途要インストール（requirements.txt に未収録）
 │   ├── test_pii_masker.py  # PIIマスキングのユニットテスト
 │   ├── test_first_pass.py  # 1次通過判定（○/△/×/判定不能）・応募日時パースのユニットテスト
 │   ├── test_claude_client.py # Claude CLI の起動引数・起動フォルダ
+│   ├── test_claude_api_client.py # Claude API の終わり方の判定・再試行・キーの検査と伏せ字・設定検証
 │   └── test_notify.py      # 結果メールの「評価できなかった応募者」表示
+├── scripts/                # 開発者専用（配布しない）
+│   └── set-anthropic-key.ps1 # Claude API のキーを %LOCALAPPDATA%\hrmos-auto-eval\ に保存
 ├── improvement_list/       # 改修履歴（YYYY-MM-DD_{説明}.md）
 ├── docs/                   # 総括報告書・アーキテクチャ図
 └── data/                   # 実行時に自動生成
@@ -389,7 +394,7 @@ evaluation_criteria:
 ```yaml
 evaluation:
   provider: "claude"
-  model: "opus"     # claude なら sonnet / opus、gemini_api なら API のモデル名
+  model: "opus"     # claude なら sonnet / opus、claude_api なら claude-opus-5-5 のような正式名、gemini_api なら API のモデル名
 ```
 
 **`model` は必ず書いてください。** 空にすると Claude CLI のその時点の既定モデル（＝開発者が Claude Code で選んでいるモデル）が使われ、そちらを切り替えた瞬間に応募者の採点基準も変わります。実際 2026-09-09 に既定モデルが CLI の対応外バージョンに変わり、評価が全件失敗する状態になりました。
@@ -398,7 +403,9 @@ evaluation:
 
 ### 1次通過の閾値
 
-`first_pass_criteria` は年齢帯ごとの平均点しきい値です。**平均点は評価項目数で割った値なので、取りうる値は飛び飛びになります**（7項目なら 0.143 刻み）。そのため `3.9` と `4.0` のように、間に取りうる値がない2つの設定は同じ判定になります。閾値を変えるときは実際の点数分布を見て決めてください。
+`first_pass_criteria` は年齢帯ごとの平均点しきい値です。**平均点は評価項目数で割った値を小数第1位に四捨五入してから比べるので、取りうる値は飛び飛びになります**（7項目なら 2.0 / 2.1 / 2.3 / 2.4 / 2.6 …）。そのため `2.8` と `2.9` のように、間に出る値がない2つの設定は同じ判定になります。閾値を変えるときは実際の点数分布を見て決めてください。自動NG登録の対象は ○ 以外（△ と ×）です。
+
+**採点に使うモデルを変えたら閾値も見直してください。** 2026-11-01 に Opus 5 から Opus 5.5 へ切り替えた際、同じ書類で合計点が平均約1.7点下がりました（同じ56名を両モデルで採点して実測）。閾値はこれに合わせて一律2段階（合計点で2点）下げています。
 
 面接質問の観点も `interview_questions.perspective` で自由にカスタマイズできます。
 
@@ -436,6 +443,12 @@ claude doctor      # インストール診断
 インストール済みでも**初回のブラウザ認証が済んでいないと非対話実行は失敗します**。一度 `claude` を起動してログインを完了してください。無人実行を安定させたい場合は `claude setup-token` で発行したトークンを環境変数 `CLAUDE_CODE_OAUTH_TOKEN` に設定します。
 
 `API Error: 400 ... does not support this model` が出る場合は、**Claude CLI のバージョンが `config.yaml` の `evaluation.model` に対応していません**。`claude update` で CLI を更新するか、`model` を対応するモデル（`sonnet` など）に変更してください。
+
+**`claude_api` の場合**
+
+- `doctor` の `Claude APIキー` の行が `NG` なら、キーが置かれていないか形が違います。プロジェクトのフォルダで `powershell -ExecutionPolicy Bypass -File scripts\set-anthropic-key.ps1` を実行して保存し直してください（キーは [Claude Console](https://platform.claude.com) の API Keys で発行。「Claude Code」ワークスペースには作らない）
+- `HTTP 400 ... credit balance is too low` はクレジットの使い切りです。自動チャージがオフなら請求は来ず、次の月次クレジットの付与まで評価が止まります。評価できなかった応募者は `status='error'` になるので、付与後に `run.py scan --retry-errors` で拾い直します
+- キーを**ユーザー環境変数 `ANTHROPIC_API_KEY` に置かないでください**。Claude Code の非対話モード（`claude -p`）がその変数を拾い、この PC のすべての `claude -p` が API 課金に切り替わります
 
 **`gemini`（CLI）の場合**
 

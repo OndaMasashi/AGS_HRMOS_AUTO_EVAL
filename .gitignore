@@ -1,6 +1,10 @@
 # 認証・設定（機密情報）
 config.yaml
 storage_state.json
+# Claude API のキー。本来の置き場はリポジトリの外（%LOCALAPPDATA%\hrmos-auto-eval\）だが、
+# 誤ってリポジトリ内へ写した場合にもコミットされないようにする
+anthropic-api-key
+*.key
 
 # データ
 data/

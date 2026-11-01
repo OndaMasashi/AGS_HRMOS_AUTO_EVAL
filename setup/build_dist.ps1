@@ -43,6 +43,7 @@ $ForbiddenPrefix = @(
     'note/',
     '.claude/',         # 開発用のエディタ設定。配布先には不要
     'tests/',           # テストコード。配布先では実行しない
+    'scripts/',         # 開発者専用（Claude API のキー保存など）。配布先では使わない
     'docs/'             # 開発資料。利用者向けの説明は setup/OVERVIEW.html に集約済み
 )
 

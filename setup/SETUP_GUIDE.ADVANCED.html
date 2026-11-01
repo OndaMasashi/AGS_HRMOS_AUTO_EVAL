@@ -317,8 +317,8 @@ footer { border-top:2px solid var(--ink); margin-top:16px; padding-top:20px; fon
         </div>
         <div class="note warn">
           <span class="label">0.1 ずつ動かしても変わらないことがあります</span>
-          <p>平均点は「合計点 &divide; 評価項目数」なので、<b>取りうる値が飛び飛び</b>になります。項目が7つなら 2.00 / 2.14 / 2.29 … と 0.143 刻みでしか出ません。</p>
-          <p style="margin-bottom:0">つまり <code>2.9</code> と <code>3.0</code> のように<b>間に値が無い2つは同じ判定</b>になります。動かすなら <b>0.2〜0.3 ずつ</b>にして、変更後に <code>run.py report</code> で実際の人数を確かめてください。</p>
+          <p>平均点は「合計点 &divide; 評価項目数」を<b>小数第1位に四捨五入してから</b>比べます。項目が7つなら、丸めた平均点は 2.0 / 2.1 / 2.3 / 2.4 / 2.6 / 2.7 / 2.9 / 3.0 … と<b>飛び飛びの値しか出ません</b>（2.2・2.5・2.8 などは出ない）。</p>
+          <p style="margin-bottom:0">つまり <code>2.8</code> と <code>2.9</code> のように<b>間に出る値が無い2つは同じ判定</b>になります。動かすなら <b>0.2〜0.3 ずつ</b>にして、変更後に <code>run.py report</code> で実際の人数を確かめてください。</p>
         </div>
         <div class="note good">
           <span class="label">再評価は不要です</span>
@@ -330,7 +330,7 @@ footer { border-top:2px solid var(--ink); margin-top:16px; padding-top:20px; fon
         </div>
         <div class="note danger">
           <span class="label">自動NG登録を使っている場合は先に読んでください</span>
-          <p style="margin-bottom:0"><b>しきい値を上げると、HRMOS へ自動で NG 登録される人が増えます</b>（△ だった人が × に変わるため）。この機能を有効にしているなら、<a href="#t10">手順10</a> の確認手順に従ってください。</p>
+          <p style="margin-bottom:0"><b>しきい値を上げると、HRMOS へ自動で NG 登録される人が増えます</b>（○ 以外の △ と × が登録の対象で、○ だった人が △ に変わるため）。この機能を有効にしているなら、<a href="#t10">手順10</a> の確認手順に従ってください。</p>
         </div>
       </div>
 
@@ -427,7 +427,7 @@ footer { border-top:2px solid var(--ink); margin-top:16px; padding-top:20px; fon
 
         <div class="note warn">
           <span class="label">しきい値を変えた直後は必ず確認してください</span>
-          <p style="margin-bottom:0"><a href="#t4">手順4</a> で ○ の基準を<b>上げる</b>と、これまで △ だった人が × に変わり、<b>自動NG登録の対象が増えます</b>。基準を変えたら一度 <code>dry_run: true</code> に戻し、対象者を確かめてから戻すのが安全です。</p>
+          <p style="margin-bottom:0"><a href="#t4">手順4</a> で ○ の基準を<b>上げる</b>と、これまで ○ だった人が △ に変わり、<b>自動NG登録の対象（△ と ×）が増えます</b>。基準を変えたら一度 <code>dry_run: true</code> に戻し、対象者を確かめてから戻すのが安全です。</p>
         </div>
 
         <h4>対象にならない人</h4>
